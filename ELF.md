@@ -272,7 +272,7 @@ ELF/
 | `LELF` | `TRUE` | 输出电子局域函数 |
 | `LCHARG` | `TRUE` | 输出电荷密度 |
 | `ENCUT` | `800` | 截断能 (eV) |
-| `KSPACING` | `0.02` | K 点间距 |
+| `KSPACING` | `0.03` | K 点间距 |
 
 ---
 

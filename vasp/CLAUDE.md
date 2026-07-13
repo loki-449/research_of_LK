@@ -43,7 +43,7 @@ python submit_opt_elf.py ./vasp/opt                         # ④ 提交任务
 # 或一键: python run_elf_batch.py /path/to/QE_folder
 ```
 
-**INCAR**: ISIF=3, IBRION=2, NSW=200, EDIFFG=-0.01, ENCUT=800, KSPACING=0.02
+**INCAR**: ISIF=3, IBRION=2, NSW=200, EDIFFG=-0.01, ENCUT=800, KSPACING=0.03
 
 ### ② vasp/scf_ELF/ — SCF + ELF 计算
 从 opt_ELF 优化后的 CONTCAR 部署 ELF 计算。
@@ -60,7 +60,7 @@ python scf_contcar_to_poscar_ELF.py --scan --write-pbs      # ① CONTCAR → PO
 #  或一键: python run_scf_batch.py /path/to/QE_folder --elf-root ./vasp/scf_ELF
 ```
 
-**INCAR**: LELF=TRUE, LCHARG=TRUE, ENCUT=800, KSPACING=0.02
+**INCAR**: LELF=TRUE, LCHARG=TRUE, ENCUT=800, KSPACING=0.03
 
 ### ③ vasp/opt_scf_bader/ — Bader 电荷分析（待部署）
 从 scf 计算结果做 Bader 电荷布居分析，输出 ACF 数据与汇总。
