@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Local env (keep *.example)
+**/deploy.env
+**/.env
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.swp
+
+# Large / local work
+AIMD/example/_mvp_work/
+**/vasp.zip

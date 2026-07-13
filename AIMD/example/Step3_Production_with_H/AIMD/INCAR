@@ -1,0 +1,27 @@
+# --- 基础设置 ---
+SYSTEM = Step3_Production_with_H
+PREC   = Accurate      # 建议提高精度
+ALGO   = Fast
+LREAL  = Auto
+ISMEAR = 0; SIGMA = 0.05
+EDIFF  = 1E-5          # 提高能量收敛判据以确保力的准度
+
+# --- 性能优化 ---
+ISYM   = 0
+NCORE  = 4
+
+# --- MD 核心控制 (含 H 优化) ---
+IBRION = 0
+MDALGO = 2
+SMASS  = 0.5
+ISIF   = 2
+TEBEG  = 100
+POTIM  = 0.5           # 必须调小，捕捉 H 的高频振动
+NSW    = 40000         # 因为步长减半，步数要加倍才能维持同样的物理时间
+NELM   = 100           # 增加电子步收敛机会
+
+# --- 采样与读写 ---
+NBLOCK = 1
+ISTART = 0
+LWAVE  = .FALSE.
+LCHARG = .FALSE.
