@@ -128,6 +128,9 @@ def write_dat(
     stride: int = 1,
     element_order: List[str] | None = None,
 ) -> Path:
+    if stride < 1:
+        raise ValueError(f"stride must be >= 1, got {stride}")
+
     out = Path(outpath)
     out.parent.mkdir(parents=True, exist_ok=True)
     if element_order is None:
