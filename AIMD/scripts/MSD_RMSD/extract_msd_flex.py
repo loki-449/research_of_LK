@@ -178,7 +178,7 @@ def main(argv: list[str] | None = None) -> int:
                 ok += 1
         print("---------------------------")
         print(f"Finished: {ok}/{len(files)}")
-        return 0 if ok else 1
+        return 0 if ok == len(files) else 1
 
     if not args.xdatcar:
         build_parser().print_help()
