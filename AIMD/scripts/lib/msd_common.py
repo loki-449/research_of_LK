@@ -288,6 +288,13 @@ def publish_file(src: str | Path, dest: str | Path, keep_local: bool = False) ->
     dest_p.parent.mkdir(parents=True, exist_ok=True)
     if not src_p.is_file():
         raise FileNotFoundError(f"Cannot publish missing file: {src_p}")
+    try:
+        same_file = src_p.samefile(dest_p)
+    except FileNotFoundError:
+        same_file = False
+    if same_file:
+        print(f"  already published -> {dest_p}")
+        return dest_p
     if dest_p.exists():
         dest_p.unlink()
     if keep_local:
