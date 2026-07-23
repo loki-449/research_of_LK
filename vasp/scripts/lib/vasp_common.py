@@ -241,8 +241,12 @@ def write_poscar(structure: RelaxStructure, output: str | Path) -> Path:
         " ".join(str(c) for c in structure.counts),
         "Direct",
     ]
-    for _, x, y, z in structure.positions:
-        lines.append(f"  {x:.16f}  {y:.16f}  {z:.16f}")
+    # POSCAR 不在每行保存元素名，VASP 按元素计数依次解释坐标；
+    # QE 允许不同元素的坐标交错，因此写出前必须按元素表分组。
+    for element in structure.elements:
+        for position_element, x, y, z in structure.positions:
+            if position_element == element:
+                lines.append(f"  {x:.16f}  {y:.16f}  {z:.16f}")
 
     out.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return out
