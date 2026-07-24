@@ -57,6 +57,10 @@ def read_xdatcar(path: str | Path) -> Tuple[np.ndarray, List[str]]:
                     break
                 coords.append([float(x) for x in lines[idx].split()[:3]])
                 idx += 1
+            if len(coords) != n_atoms:
+                # VASP 仍在写 XDATCAR 时，文件末尾可能只有半个构型。
+                # 丢弃该尾帧，避免与完整帧组成不规则数组而使批处理崩溃。
+                break
             pos = np.array(coords)
             if keyword.lower().startswith("direct"):
                 pos = pos @ lattice
