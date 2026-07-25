@@ -17,7 +17,7 @@
 输出:  $VASP_WORK_ROOT/<材料>/<压强>/scf_ELF/
          ├── POSCAR    ← 由 CONTCAR 复制
          ├── ELF.pbs   ← LELF=TRUE INCAR
-         ├── POTCAR    ← run_scf_batch 生成
+         ├── POTCAR    ← 从 opt 复制，或由 run_scf_batch 生成
          └── ELFCAR    ← VASP 运行后生成
 ```
 
@@ -41,7 +41,10 @@ source deploy.env
 $VASP_PYTHON $VASP_SCRIPTS_ROOT/scf_ELF/scf_contcar_to_poscar_ELF.py \
     --scan --write-pbs
 
-# ② 手动进入 scf_ELF 目录提交（或自行写批量提交脚本）
+# ② 元素不变时沿用 opt/POTCAR
+cp $VASP_WORK_ROOT/Ag/50/opt/POTCAR $VASP_WORK_ROOT/Ag/50/scf_ELF/
+
+# ③ 手动进入 scf_ELF 目录提交（或自行写批量提交脚本）
 cd $VASP_WORK_ROOT/Ag/50/scf_ELF
 qsub ELF.pbs
 ```
@@ -79,6 +82,10 @@ python scf_contcar_to_poscar_ELF.py \
 ```bash
 python run_scf_batch.py $QE_ROOT --work-root $VASP_WORK_ROOT
 ```
+
+若目标 `scf_ELF/POSCAR` 已存在，脚本默认保留它并仅重建
+`ELF.pbs`、`POTCAR`，避免覆盖由 opt/CONTCAR 得到的结构。只有确认要改回
+QE `relax.in` 结构时才使用 `--overwrite-poscar`。
 
 ## INCAR 要点（ELF.pbs）
 

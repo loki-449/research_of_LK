@@ -251,7 +251,7 @@ QE 文件夹名：`Ag-H-50GPa-300K`
 | **生成物** | `POSCAR`；可选 `ELF.pbs` |
 | **生成路径** | `$WR/<A>/<B>/scf_ELF/POSCAR`，`$WR/<A>/<B>/scf_ELF/ELF.pbs` |
 | **依赖库** | `vasp_common.iter_opt_input_files`；`scf_common.setup_scf_scripts` |
-| **不自动生成** | POTCAR（需手动从 opt 复制或另跑 `run_scf_batch`） |
+| **不自动生成** | POTCAR（推荐从元素顺序相同的 `opt/POTCAR` 复制） |
 | **VASP 运行后** | `ELFCAR`、`CHGCAR` 等 |
 
 #### `run_scf_batch.py`（旁路）
@@ -265,6 +265,7 @@ QE 文件夹名：`Ag-H-50GPa-300K`
 | **生成路径** | `$WR/<A>/<B>/scf_ELF/` 下上述三文件 |
 | **依赖库** | `scf_common.deploy_scf_system` |
 | **与主路径关系** | **替代** `scf_contcar_to_poscar_ELF`；用 QE 初始结构而非 opt 优化结构 |
+| **覆盖保护** | 已有 POSCAR 时默认保留并仅补 PBS/POTCAR；仅 `--overwrite-poscar` 显式覆盖 |
 
 #### `elf_common.py`
 
