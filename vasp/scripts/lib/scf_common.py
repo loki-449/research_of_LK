@@ -25,6 +25,7 @@ from vasp_common import (
     SCF_SUBDIR,
     assemble_potcar,
     parse_relax_in,
+    read_poscar_elements,
     write_poscar,
     write_run_script,
 )
@@ -77,10 +78,17 @@ def deploy_scf_system(
     relax_in: str | Path,
     base_dir: str | Path,
     pbe_lib: str | Path = DEFAULT_PBE_LIB,
+    overwrite_poscar: bool = False,
 ) -> Tuple[RelaxStructure, Dict[str, Dict[str, Any]]]:
-    """Full deploy for scf: run script + POSCAR + POTCAR in scf_ELF."""
+    """部署 scf 输入；默认保留已有 POSCAR，避免覆盖 opt 优化结构。"""
     structure = parse_relax_in(relax_in)
     setup_scf_scripts(base_dir)
-    deploy_poscar_to_scf(structure, base_dir)
-    sources = deploy_potcar_to_scf(structure.elements, base_dir, pbe_lib=pbe_lib)
+    poscar = Path(base_dir) / SCF_SUBDIR / "POSCAR"
+    preserve_poscar = poscar.is_file() and not overwrite_poscar
+    elements = read_poscar_elements(poscar) if preserve_poscar else structure.elements
+
+    # 先完成可能失败的赝势组装；失败时不得破坏已有优化结构。
+    sources = deploy_potcar_to_scf(elements, base_dir, pbe_lib=pbe_lib)
+    if not preserve_poscar:
+        deploy_poscar_to_scf(structure, base_dir)
     return structure, sources

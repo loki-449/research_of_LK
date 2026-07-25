@@ -47,6 +47,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Skip if POSCAR and POTCAR already exist in scf_ELF",
     )
+    parser.add_argument(
+        "--overwrite-poscar",
+        action="store_true",
+        help="Replace an existing scf_ELF/POSCAR with the QE relax.in structure",
+    )
     parser.add_argument("--dry-run", action="store_true", help="Plan only, no writes")
     return parser
 
@@ -61,6 +66,7 @@ def process_one(
     work_root: Path,
     pbe_lib: str,
     skip_existing: bool,
+    overwrite_poscar: bool,
     dry_run: bool,
 ) -> bool:
     info = parse_qe_system(system_dir)
@@ -85,11 +91,23 @@ def process_one(
         return True
 
     if dry_run:
-        print(f"  [dry-run] would create {SCF_SUBDIR} with PBS/POSCAR/POTCAR")
+        poscar = base_dir / SCF_SUBDIR / "POSCAR"
+        poscar_action = (
+            "preserve existing POSCAR"
+            if poscar.is_file() and not overwrite_poscar
+            else "write POSCAR from relax.in"
+        )
+        print(f"  [dry-run] would write PBS/POTCAR and {poscar_action}")
         return True
 
+    poscar_existed = (base_dir / SCF_SUBDIR / "POSCAR").is_file()
     try:
-        structure, sources = deploy_scf_system(relax_in, base_dir, pbe_lib=pbe_lib)
+        structure, sources = deploy_scf_system(
+            relax_in,
+            base_dir,
+            pbe_lib=pbe_lib,
+            overwrite_poscar=overwrite_poscar,
+        )
         print(f"  {SCF_SUBDIR}/ELF.pbs written (ELF INCAR, LELF=TRUE)")
     except (ValueError, FileNotFoundError, OSError) as exc:
         print(f"  ERROR: {exc}")
@@ -97,10 +115,13 @@ def process_one(
             print(f"  DONE (partial): {base_dir}")
         return False
 
-    elem_summary = " ".join(
-        f"{e}({c})" for e, c in zip(structure.elements, structure.counts)
-    )
-    print(f"  POSCAR: {elem_summary} -> {SCF_SUBDIR}/")
+    if poscar_existed and not overwrite_poscar:
+        print(f"  POSCAR: preserved existing {SCF_SUBDIR}/POSCAR")
+    else:
+        elem_summary = " ".join(
+            f"{e}({c})" for e, c in zip(structure.elements, structure.counts)
+        )
+        print(f"  POSCAR: {elem_summary} -> {SCF_SUBDIR}/")
     for elem, meta in sources.items():
         print(f"  {elem} -> {meta['dir']} (ZVAL={meta['zval']}, {meta['date']})")
     print(f"  POTCAR assembled -> {SCF_SUBDIR}/")
@@ -127,6 +148,7 @@ def main(argv: list[str] | None = None) -> int:
             work_root,
             args.pbe_lib,
             skip_existing=args.skip_existing,
+            overwrite_poscar=args.overwrite_poscar,
             dry_run=args.dry_run,
         ):
             ok += 1

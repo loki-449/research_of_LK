@@ -205,7 +205,7 @@ $VASP_PYTHON $SCR/scf_ELF/scf_contcar_to_poscar_ELF.py --system-dir $WR/Ag/50 --
 |----|------|
 | 前置 | `$WR/<A>/<B>/opt/CONTCAR` 已存在 |
 | 生成 | `scf_ELF/POSCAR`；可选 `ELF.pbs` |
-| 不自动生成 | POTCAR（需 cp 或走 `run_scf_batch`） |
+| 不自动生成 | POTCAR（推荐从元素顺序相同的 `opt/POTCAR` 复制） |
 
 ### 3.7 `run_scf_batch.py`（旁路）
 
@@ -217,6 +217,7 @@ $VASP_PYTHON $SCR/scf_ELF/run_scf_batch.py $QE
 |----|------|
 | 输入 | QE `relax.in`（不读 CONTCAR） |
 | 生成 | `scf_ELF/{ELF.pbs,POSCAR,POTCAR}` |
+| 已有 POSCAR | 默认保留并仅补 PBS/POTCAR；`--overwrite-poscar` 才用 QE 结构覆盖 |
 
 ### 3.8 `remove_xcursor.py`
 
