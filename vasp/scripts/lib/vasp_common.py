@@ -39,7 +39,9 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 # ============================================================
 DEFAULT_PBE_LIB = "/home/test1/hhy/basic/psudopotential/PAW-GGA-PBE"
 
-COORD_KEYWORDS = frozenset({"crystal", "alat", "bohr", "angstrom"})
+BOHR_TO_ANGSTROM = 0.529177210903
+POSITION_UNITS = frozenset({"crystal", "crystal_sg", "alat", "bohr", "angstrom"})
+CELL_UNITS = frozenset({"alat", "bohr", "angstrom"})
 
 # ============================================================
 # 子目录名称常量
@@ -163,6 +165,30 @@ def _split_section(text: str, start_key: str, end_keys: str | Sequence[str]) -> 
     return block[:cut]
 
 
+def _extract_card_unit(
+    block: str,
+    default_unit: str,
+) -> Tuple[str, List[str]]:
+    """提取 QE card 的单位，并返回去除单位行后的有效内容。
+
+    QE 在省略 ATOMIC_POSITIONS/CELL_PARAMETERS 单位时默认使用 alat。
+    同时兼容 ``{crystal}``、``(crystal)`` 和 ``crystal`` 三种写法。
+    """
+    lines = []
+    for raw_line in block.splitlines():
+        line = raw_line.split("!", 1)[0].strip()
+        if line:
+            lines.append(line)
+
+    if not lines:
+        return default_unit, lines
+
+    candidate = lines[0].strip("{}()").strip()
+    if re.fullmatch(r"[A-Za-z_]+", candidate):
+        return candidate.lower(), lines[1:]
+    return default_unit, lines
+
+
 @dataclass
 class RelaxStructure:
     """Structure extracted from QE relax.in."""
@@ -171,6 +197,7 @@ class RelaxStructure:
     counts: List[int]
     cell_lines: List[str]
     positions: List[Tuple[str, float, float, float]]
+    coordinate_mode: str = "Direct"
 
 
 def parse_relax_in(relax_in: str | Path) -> RelaxStructure:
@@ -180,19 +207,37 @@ def parse_relax_in(relax_in: str | Path) -> RelaxStructure:
     pos_block = _split_section(
         text, "ATOMIC_POSITIONS", ["K_POINTS", "ATOMIC_FORCES"]
     )
-    pos_lines = [
-        line.strip()
-        for line in pos_block.strip().splitlines()
-        if line.strip() and not line.strip().startswith("{")
-    ]
-    if pos_lines and pos_lines[0].lower() in COORD_KEYWORDS:
-        pos_lines = pos_lines[1:]
+    position_unit, pos_lines = _extract_card_unit(pos_block, default_unit="alat")
+    if position_unit not in POSITION_UNITS:
+        raise ValueError(
+            f"Unsupported ATOMIC_POSITIONS unit '{position_unit}' in {relax_in}"
+        )
+    if position_unit == "alat":
+        raise ValueError(
+            f"ATOMIC_POSITIONS alat requires a QE lattice parameter; "
+            f"convert it to crystal or angstrom in {relax_in}"
+        )
+    if position_unit == "crystal_sg":
+        raise ValueError(
+            f"ATOMIC_POSITIONS crystal_sg requires symmetry expansion; "
+            f"convert it to crystal in {relax_in}"
+        )
+
+    coordinate_mode = "Direct" if position_unit == "crystal" else "Cartesian"
+    position_scale = BOHR_TO_ANGSTROM if position_unit == "bohr" else 1.0
 
     positions: List[Tuple[str, float, float, float]] = []
     for line in pos_lines:
         parts = line.split()
         if len(parts) >= 4:
-            positions.append((parts[0], float(parts[1]), float(parts[2]), float(parts[3])))
+            positions.append(
+                (
+                    parts[0],
+                    float(parts[1]) * position_scale,
+                    float(parts[2]) * position_scale,
+                    float(parts[3]) * position_scale,
+                )
+            )
 
     if not positions:
         raise ValueError(f"No atomic positions found in {relax_in}")
@@ -204,14 +249,26 @@ def parse_relax_in(relax_in: str | Path) -> RelaxStructure:
     counts = [sum(1 for p in positions if p[0] == elem) for elem in elements]
 
     cell_block = _split_section(text, "CELL_PARAMETERS", "ATOMIC_POSITIONS")
+    cell_unit, cell_vector_lines = _extract_card_unit(
+        cell_block, default_unit="alat"
+    )
+    if cell_unit not in CELL_UNITS:
+        raise ValueError(
+            f"Unsupported CELL_PARAMETERS unit '{cell_unit}' in {relax_in}"
+        )
+    if cell_unit == "alat":
+        raise ValueError(
+            f"CELL_PARAMETERS alat requires a QE lattice parameter; "
+            f"convert it to angstrom or bohr in {relax_in}"
+        )
+
+    cell_scale = BOHR_TO_ANGSTROM if cell_unit == "bohr" else 1.0
     cell_lines: List[str] = []
-    for line in cell_block.strip().splitlines():
-        line = line.strip()
-        if not line or line.startswith("{"):
-            continue
+    for line in cell_vector_lines:
         parts = line.split()
         if len(parts) >= 3:
-            cell_lines.append(line)
+            vector = [float(value) * cell_scale for value in parts[:3]]
+            cell_lines.append("  " + "  ".join(f"{value:.16f}" for value in vector))
     cell_lines = cell_lines[:3]
     if len(cell_lines) != 3:
         raise ValueError(f"Expected 3 cell vectors in {relax_in}, got {len(cell_lines)}")
@@ -221,6 +278,7 @@ def parse_relax_in(relax_in: str | Path) -> RelaxStructure:
         counts=counts,
         cell_lines=cell_lines,
         positions=positions,
+        coordinate_mode=coordinate_mode,
     )
 
 
@@ -239,7 +297,7 @@ def write_poscar(structure: RelaxStructure, output: str | Path) -> Path:
         *structure.cell_lines,
         " ".join(structure.elements),
         " ".join(str(c) for c in structure.counts),
-        "Direct",
+        structure.coordinate_mode,
     ]
     for _, x, y, z in structure.positions:
         lines.append(f"  {x:.16f}  {y:.16f}  {z:.16f}")
