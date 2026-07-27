@@ -4,12 +4,13 @@ msd_common.py — MSD/RMSD 公共模块（供 flex 脚本调用，一般不直�
 
 功能:
   - 读取 VASP XDATCAR，按元素计算 MSD/RMSD
-  - 读写 .dat；从 AIMD/INCAR 解析 POTIM；产物 mkdir + mv 汇总
+  - 读写 .dat；从 AIMD/INCAR 解析 POTIM/NBLOCK；产物 mkdir + mv 汇总
 
 列名约定: Time(ps) / <元素>_MSD(A2) / <元素>_RMSD(A)
 
 dt 备注:
-  POTIM（fs）决定 Time(ps)=frame*POTIM/1000；读错会整体拉伸时间轴。
+  XDATCAR 帧间隔为 POTIM*NBLOCK（fs）；
+  Time(ps)=frame*POTIM*NBLOCK/1000，读错会整体拉伸时间轴。
   详见 AIMD_WORKFLOW.md / AIMD_DEPLOY_SPEC.md。
 """
 from __future__ import annotations
@@ -183,7 +184,7 @@ def match_columns(columns: List[str], pattern: str) -> List[str]:
 
 
 # ---------------------------------------------------------------------------
-# 工作根布局 / POTIM / 汇总 mv
+# 工作根布局 / POTIM/NBLOCK / 汇总 mv
 # ---------------------------------------------------------------------------
 
 def system_dir_from_xdatcar(xdatcar: str | Path) -> Path:
@@ -215,11 +216,33 @@ def read_potim_from_incar(incar_path: str | Path) -> float:
     )
 
 
+def read_nblock_from_incar(incar_path: str | Path) -> int:
+    """从 INCAR 解析 NBLOCK；未设置时使用 VASP 默认值 1。"""
+    text = Path(incar_path).read_text(encoding="utf-8", errors="replace")
+    for raw in text.splitlines():
+        line = raw.split("#", 1)[0].split("!", 1)[0].strip()
+        if not line:
+            continue
+        m = re.match(r"NBLOCK\s*=\s*([+-]?\d+)", line, re.IGNORECASE)
+        if m:
+            nblock = int(m.group(1))
+            if nblock <= 0:
+                raise ValueError(
+                    f"NBLOCK must be a positive integer in {incar_path}, got {nblock}"
+                )
+            return nblock
+    return 1
+
+
 def resolve_dt(
     aimd_dir: str | Path,
     cli_dt: Optional[float] = None,
 ) -> Tuple[float, str]:
-    """返回 (dt_fs, source_desc)。CLI 优先；否则读 AIMD/INCAR 的 POTIM。"""
+    """返回 XDATCAR 帧间隔 (dt_fs, source_desc)。
+
+    CLI --dt 表示相邻 XDATCAR 帧的时间间隔并优先使用；否则根据
+    INCAR 的 POTIM*NBLOCK 计算，其中 NBLOCK 未设置时采用 VASP 默认值 1。
+    """
     aimd = Path(aimd_dir)
     incar = aimd / "INCAR"
     if cli_dt is not None:
@@ -227,9 +250,13 @@ def resolve_dt(
         if incar.is_file():
             try:
                 potim = read_potim_from_incar(incar)
-                if abs(potim - cli_dt) > 1e-12:
+                nblock = read_nblock_from_incar(incar)
+                frame_dt = potim * nblock
+                if abs(frame_dt - cli_dt) > 1e-12:
                     print(
-                        f"  WARNING: --dt={cli_dt} differs from INCAR POTIM={potim} "
+                        f"  WARNING: --dt={cli_dt} differs from INCAR-derived "
+                        f"frame interval={frame_dt} fs "
+                        f"(POTIM={potim}, NBLOCK={nblock}) "
                         f"({incar}); using CLI value."
                     )
             except FileNotFoundError:
@@ -242,7 +269,12 @@ def resolve_dt(
             "Cannot resolve timestep."
         )
     potim = read_potim_from_incar(incar)
-    return potim, f"INCAR POTIM={potim} ({incar})"
+    nblock = read_nblock_from_incar(incar)
+    frame_dt = potim * nblock
+    return (
+        frame_dt,
+        f"INCAR POTIM={potim}, NBLOCK={nblock} -> frame dt={frame_dt} ({incar})",
+    )
 
 
 def iter_aimd_xdatcars(work_root: str | Path) -> List[Path]:

@@ -21,8 +21,10 @@ $AIMD_WORK_ROOT/
 
 ## dt（时间步）
 
-未指定 `--dt` 时读 `$WR/<A>/AIMD/INCAR` 中的 **POTIM**（fs）。  
-`Time(ps) = frame * POTIM / 1000`。POTIM 读错 → 时间轴整体缩放错误。
+未指定 `--dt` 时读 `$WR/<A>/AIMD/INCAR` 中的 **POTIM** 与
+**NBLOCK**（未设置时按 VASP 默认值 1）。
+`Time(ps) = frame * POTIM * NBLOCK / 1000`。`--dt` 表示相邻
+XDATCAR 帧的时间间隔；时间间隔读错会使时间轴和扩散斜率整体缩放错误。
 
 ## 推荐命令
 

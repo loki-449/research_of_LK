@@ -2,7 +2,7 @@
 """
 xdatcar_msd_flex.py — XDATCAR 一体化 MSD/RMSD 计算与绘图
 
-dt 默认自 AIMD/INCAR 的 POTIM；可选写 <A>/msd_data.dat 并 mv 汇总。
+dt 默认自 AIMD/INCAR 的 POTIM*NBLOCK；可选写 <A>/msd_data.dat 并 mv 汇总。
 默认若出图：png mv 到 MSD_png/。
 """
 from __future__ import annotations
@@ -42,7 +42,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--dt",
         type=float,
         default=None,
-        help="Timestep fs (default: POTIM from AIMD/INCAR)",
+        help="XDATCAR frame interval in fs (default: POTIM * NBLOCK from AIMD/INCAR)",
     )
     parser.add_argument("--elements", nargs="*", default=None)
     parser.add_argument(
