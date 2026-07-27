@@ -7,8 +7,8 @@ extract_msd_flex.py — 从 XDATCAR 提取 MSD/RMSD（元素自动识别）
   $WR/MSD_data_for_origin/<A>_msd_data.dat
 
 dt:
-  未给 --dt 时从同体系 AIMD/INCAR 的 POTIM 读取（fs）。
-  Time(ps) = frame_index * POTIM / 1000。
+  未给 --dt 时从同体系 AIMD/INCAR 读取 POTIM 与 NBLOCK。
+  Time(ps) = frame_index * POTIM * NBLOCK / 1000。
 
 基本用法:
   python extract_msd_flex.py $AIMD_WORK_ROOT/Ba3AgH7/AIMD/XDATCAR
@@ -56,7 +56,10 @@ def build_parser() -> argparse.ArgumentParser:
         "--dt",
         type=float,
         default=None,
-        help="AIMD timestep in fs (default: read POTIM from AIMD/INCAR)",
+        help=(
+            "XDATCAR frame interval in fs "
+            "(default: POTIM * NBLOCK from AIMD/INCAR)"
+        ),
     )
     parser.add_argument(
         "-o",

@@ -13,7 +13,7 @@
 | 子阶段（本轮） | MSD/RMSD 后处理（`MSD_RMSD`） |
 | 脚本安装根变量 | `AIMD_SCRIPTS_ROOT` |
 | 计算工作根变量 | `AIMD_WORK_ROOT` |
-| 输入约定 | `$AIMD_WORK_ROOT/<A>/AIMD/XDATCAR` + 同目录 `INCAR`（读 POTIM） |
+| 输入约定 | `$AIMD_WORK_ROOT/<A>/AIMD/XDATCAR` + 同目录 `INCAR`（读 POTIM、NBLOCK） |
 | deploy 配置 | `AIMD/deploy.env.example` → `deploy.env`（**与 vasp/deploy.env 分开**） |
 | 自动加载 | `AIMD_DEPLOY_ENV` |
 | Python | `AIMD_PYTHON`（默认 `python3`） |
@@ -44,7 +44,7 @@ $AIMD_WORK_ROOT/
     ├── scf-MD/              # 本轮 MSD 不读
     ├── AIMD/
     │   ├── XDATCAR          # ★ 输入
-    │   └── INCAR            # ★ 解析 POTIM → dt（fs）
+    │   └── INCAR            # ★ 解析 POTIM*NBLOCK → 帧间隔 dt（fs）
     └── msd_data.dat         # ★ 中间输出（extract 写这里），成功后 mv 走
 ```
 
@@ -85,7 +85,7 @@ AIMD/
     ├── lib/
     │   ├── bootstrap.py
     │   ├── path_config.py
-    │   ├── msd_common.py        # + read_potim_from_incar / resolve_dt
+    │   ├── msd_common.py        # + POTIM/NBLOCK 解析 / resolve_dt
     │   └── ...
     ├── MSD_RMSD/
     │   ├── extract_msd_flex.py
@@ -107,7 +107,7 @@ AIMD/
 | 位置 | `AIMD/example/<A>/AIMD/` |
 | 输入 | 用户提供的 `XDATCAR` + `INCAR`（含 `POTIM`） |
 | 裁剪原则 | 保留文件头 + **尽量少的帧**（如 20–50 帧）以最快跑通；从完整轨迹删减，不改元素行 |
-| `--dt` | **禁止手填默认顶替**；从该体系 `INCAR` 的 `POTIM` 读取 |
+| `--dt` | **禁止手填默认顶替**；从该体系 `INCAR` 的 `POTIM*NBLOCK` 读取 |
 | 期望 | `$WR/<A>/msd_data.dat` → `mv` → `$WR/MSD_data_for_origin/<A>_msd_data.dat` |
 | 成功判据 | 汇总目录存在非空 `.dat`；header 含 `Time(ps)` 与 `*_MSD(A2)` |
 
@@ -120,7 +120,7 @@ AIMD/
 ```
 $WR/<A>/AIMD/{XDATCAR, INCAR}
         │
-        ├─ resolve_dt(INCAR) → POTIM (fs)
+        ├─ resolve_dt(INCAR) → POTIM*NBLOCK 帧间隔 (fs)
         │
         ├─[extract]──→ $WR/<A>/msd_data.dat
         │                    │
@@ -147,22 +147,23 @@ $WR/<A>/AIMD/{XDATCAR, INCAR}
 
 | 原设想 | **废止**作为静态 `export AIMD_DT_DEFAULT=1.0` |
 |--------|-----------------------------------------------|
-| **正确定义** | **不是**写死在 deploy.env 的常数；对每个体系运行时从 **`$AIMD_WORK_ROOT/<A>/AIMD/INCAR`** 解析 `POTIM` |
-| 优先级 | CLI `--dt`（显式） > INCAR `POTIM` > （仅当二者皆无）报错退出，**不静默用 1.0** |
+| **正确定义** | **不是**写死在 deploy.env 的常数；对每个体系运行时从 **`$AIMD_WORK_ROOT/<A>/AIMD/INCAR`** 解析 `POTIM*NBLOCK` |
+| 优先级 | CLI `--dt`（显式帧间隔） > INCAR `POTIM*NBLOCK` > （仅当 POTIM 缺失）报错退出，**不静默用 1.0** |
 | 路径澄清 | INCAR 在**工作数据根**下，**不在** `AIMD_SCRIPTS_ROOT`。若口误说 scripts，规格一律按 WORK_ROOT 实现 |
 
 #### `dt` / INCAR 参数与结果关系（文档必写备注）
 
 | 参数 | 含义 | 对 MSD/RMSD 的影响 |
 |------|------|-------------------|
-| **POTIM** | AIMD 时间步长（fs） | **直接决定** 横轴 `Time(ps)=frame_index*POTIM/1000`。错读会整体拉伸/压缩时间轴，扩散斜率（扩散系数估计）成比例错误 |
+| **POTIM** | AIMD 离子时间步长（fs） | 与 NBLOCK 共同决定相邻 XDATCAR 帧的时间间隔 |
+| **NBLOCK** | XDATCAR 输出间隔（离子步数，VASP 默认 1） | **直接决定** 横轴 `Time(ps)=frame_index*POTIM*NBLOCK/1000`。忽略它会整体压缩时间轴，使扩散斜率成比例偏大 |
 | NSW | 离子步数 | 影响轨迹长度（帧数）；不进公式，但决定统计是否够 |
 | SMASS / 系综相关 | 热浴等 | 不改本脚本公式；影响物理轨迹本身 |
 | TEBEG/TEEND | 温度 | 不改脚本；不同 T 的 MSD 斜率不同（物理） |
 | POMASS 等 | 质量 | 不进入当前几何 MSD 实现 |
 | 输出相关 LWAVE 等 | I/O | 与 MSD 后处理无关 |
 
-脚本应在日志打印：`dt=... fs (from INCAR POTIM at .../AIMD/INCAR)`，便于核对。
+脚本应在日志打印：`dt=... fs (from INCAR POTIM=..., NBLOCK=... at .../AIMD/INCAR)`，便于核对。
 
 可选：deploy.env 注释中保留说明段，**不**导出错误默认值。
 
@@ -176,7 +177,8 @@ $WR/<A>/AIMD/{XDATCAR, INCAR}
 |----------|------|
 | `iter_aimd_xdatcars(work_root)` | `*/AIMD/XDATCAR`，排除汇总目录名 |
 | `read_potim_from_incar(incar_path) -> float` | 解析 `POTIM`；缺失则抛错 |
-| `resolve_dt(aimd_dir, cli_dt=None) -> float` | CLI > POTIM > 报错 |
+| `read_nblock_from_incar(incar_path) -> int` | 解析 `NBLOCK`；缺失时返回 VASP 默认值 1 |
+| `resolve_dt(aimd_dir, cli_dt=None) -> float` | CLI 帧间隔 > POTIM*NBLOCK > 报错 |
 | `ensure_result_dirs(work_root)` | `mkdir` `MSD_data_for_origin`、`MSD_png` |
 | `publish_dat(src_dat, work_root, system_A)` | `mv` → `MSD_data_for_origin/<A>_msd_data.dat` |
 | `publish_png(src_png, work_root, system_A)` | `mv` → `MSD_png/<A>_msd_rmsd.png` |
@@ -187,7 +189,7 @@ $WR/<A>/AIMD/{XDATCAR, INCAR}
 |----|------|
 | 默认输出 | `$WR/<A>/msd_data.dat`（由 XDATCAR 路径反推 `<A>=.../AIMD` 的父目录） |
 | 完成后 | 默认 **`mv` 到汇总目录**；可选 `--keep-local` 保留体系下副本（默认不保留，贯彻少文件） |
-| `--dt` | 可选覆盖；未给则读同体系 `AIMD/INCAR` |
+| `--dt` | 可选覆盖帧间隔；未给则读同体系 `AIMD/INCAR` |
 | `--scan` / batch | 见 G |
 
 ### D / E. 绘图
@@ -206,7 +208,7 @@ $WR/<A>/AIMD/{XDATCAR, INCAR}
 | 每体系 | resolve_dt → extract → `msd_data.dat` → `publish_dat` |
 | 默认文件名 | 中间：`<A>/msd_data.dat`；汇总：`<A>_msd_data.dat` |
 | `--with-plot` | 可选；png 同样 `mv` 汇总 |
-| `--dry-run` | 只打印 XDATCAR、POTIM、目标 mv 路径 |
+| `--dry-run` | 只打印 XDATCAR、POTIM、NBLOCK、目标 mv 路径 |
 
 ### example/
 
@@ -222,7 +224,7 @@ $WR/<A>/AIMD/{XDATCAR, INCAR}
 | 做 | 不做 |
 |----|------|
 | 路径重构、`bootstrap`、独立 deploy | 改 MSD 物理公式 |
-| INCAR→POTIM 自动 dt | 把 INCAR 放到 scripts 树下 |
+| INCAR→POTIM*NBLOCK 自动 dt | 把 INCAR 放到 scripts 树下 |
 | 中间 `<A>/msd_data.dat` + **mv** 汇总 | 在每个 `AIMD/` 内堆大量结果文件 |
 | `example/` 最小样例 | 本轮部署 opt/scf-MD 计算链 |
 
@@ -279,7 +281,7 @@ $AIMD_PYTHON $AIMD_SCRIPTS_ROOT/MSD_RMSD/run_msd_batch.py --with-plot
 | 1 | 中间 .dat 路径 | ✅ `$WR/<A>/msd_data.dat` |
 | 2 | 最终 .dat 位置 | ✅ `mv` → `$WR/MSD_data_for_origin/<A>_msd_data.dat` |
 | 3 | png | ✅ `mv` → `$WR/MSD_png/<A>_msd_rmsd.png`；批量默认不出图 |
-| 4 | `AIMD_DT_DEFAULT` | ✅ **取消静态默认**；每体系读 `$WR/<A>/AIMD/INCAR` 的 `POTIM` |
+| 4 | `AIMD_DT_DEFAULT` | ✅ **取消静态默认**；每体系读 `$WR/<A>/AIMD/INCAR` 的 `POTIM*NBLOCK` |
 | 5 | example | ✅ 建 `AIMD/example/`；等用户给 XDATCAR 后删减跑通 |
 | 6 | 旧 `MSD&RMSD/` | 跳转 README 后择机删 |
 

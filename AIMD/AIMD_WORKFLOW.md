@@ -31,16 +31,18 @@ source AIMD/deploy.env
 | `AIMD_PYTHON` | Python |
 | `AIMD_DEPLOY_ENV` | 供 bootstrap 自动加载 |
 
-**无静态 `AIMD_DT_DEFAULT`。** 每个体系从 `$WR/<A>/AIMD/INCAR` 读 **POTIM**（fs）。
+**无静态 `AIMD_DT_DEFAULT`。** 每个体系从 `$WR/<A>/AIMD/INCAR`
+读取 **POTIM** 与 **NBLOCK**，得到 XDATCAR 帧间隔（fs）。
 
 ### POTIM 与其它 INCAR 参数
 
 | 参数 | 对 MSD 的影响 |
 |------|----------------|
-| **POTIM** | `Time(ps)=frame*POTIM/1000`；错读则时间轴与扩散斜率整体错 |
+| **POTIM** | 离子时间步（fs），与 NBLOCK 共同决定时间轴 |
+| **NBLOCK** | 每隔多少离子步写一个 XDATCAR 帧（默认 1）；`Time(ps)=frame*POTIM*NBLOCK/1000` |
 | NSW | 轨迹长度（帧数） |
 | TEBEG/TEEND / 系综 | 影响物理轨迹，不改本公式 |
-| `--dt` CLI | 覆盖 POTIM；不一致时 WARNING |
+| `--dt` CLI | 显式覆盖相邻 XDATCAR 帧间隔；与 `POTIM*NBLOCK` 不一致时 WARNING |
 
 ---
 

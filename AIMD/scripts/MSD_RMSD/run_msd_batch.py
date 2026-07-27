@@ -4,7 +4,7 @@ run_msd_batch.py — 批量 MSD：扫描 $AIMD_WORK_ROOT/*/AIMD/XDATCAR
 
 默认: 各体系写 <A>/msd_data.dat → mv → MSD_data_for_origin/<A>_msd_data.dat
 默认不出图；--with-plot 时 png → MSD_png/<A>_msd_rmsd.png
-dt 默认来自各体系 AIMD/INCAR 的 POTIM。
+dt 默认来自各体系 AIMD/INCAR 的 POTIM*NBLOCK。
 """
 from __future__ import annotations
 
@@ -32,7 +32,12 @@ def build_parser() -> argparse.ArgumentParser:
         description="Batch MSD extract under AIMD_WORK_ROOT/*/AIMD/XDATCAR."
     )
     add_work_root_argument(parser)
-    parser.add_argument("--dt", type=float, default=None, help="Override POTIM for all")
+    parser.add_argument(
+        "--dt",
+        type=float,
+        default=None,
+        help="Override XDATCAR frame interval in fs for all systems",
+    )
     parser.add_argument("--stride", type=int, default=100)
     parser.add_argument("--elements", nargs="*", default=None)
     parser.add_argument(
