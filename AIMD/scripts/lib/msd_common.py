@@ -30,7 +30,12 @@ AIMD_SUBDIR = "AIMD"
 
 
 def read_xdatcar(path: str | Path) -> Tuple[np.ndarray, List[str]]:
-    """Read VASP XDATCAR and return (positions, element_map)."""
+    """读取 VASP XDATCAR，返回展开后的笛卡尔坐标与元素映射。
+
+    Direct 坐标按连续帧最小镜像位移展开，避免原子跨周期边界时把一次
+    小位移误算成接近一个晶胞长度的跳跃。该展开要求相邻输出帧之间每个
+    分数坐标分量的真实位移小于半个晶格周期。
+    """
     with open(path, encoding="utf-8", errors="replace") as f:
         lines = f.readlines()
 
@@ -45,6 +50,8 @@ def read_xdatcar(path: str | Path) -> Tuple[np.ndarray, List[str]]:
         elem_map.extend([elem] * count)
 
     frames = []
+    previous_direct = None
+    unwrapped_direct = None
     idx = 7
     while idx < len(lines):
         line = lines[idx].strip().lower()
@@ -59,7 +66,17 @@ def read_xdatcar(path: str | Path) -> Tuple[np.ndarray, List[str]]:
                 idx += 1
             pos = np.array(coords)
             if keyword.lower().startswith("direct"):
-                pos = pos @ lattice
+                if previous_direct is None:
+                    unwrapped_direct = pos.copy()
+                else:
+                    delta = pos - previous_direct
+                    delta -= np.rint(delta)
+                    unwrapped_direct = unwrapped_direct + delta
+                previous_direct = pos
+                pos = unwrapped_direct @ lattice
+            else:
+                previous_direct = None
+                unwrapped_direct = None
             frames.append(pos)
         else:
             idx += 1
