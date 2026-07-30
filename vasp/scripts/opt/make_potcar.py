@@ -151,7 +151,7 @@ def batch_scan(work_root: Path, pbe_lib: str, keep_single: bool) -> int:
         print("---------------------------")
 
     print(f"Finished: {ok}/{len(bases)} systems processed.")
-    return 0 if ok else 1
+    return 0 if ok == len(bases) else 1
 
 
 def main(argv: list[str] | None = None) -> int:
