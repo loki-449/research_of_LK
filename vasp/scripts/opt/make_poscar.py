@@ -177,7 +177,7 @@ def batch_scan(
         print("---------------------------")
 
     print(f"Finished: {ok}/{len(systems)} systems processed.")
-    return 0 if ok else 1
+    return 0 if ok == len(systems) else 1
 
 
 def main(argv: list[str] | None = None) -> int:
