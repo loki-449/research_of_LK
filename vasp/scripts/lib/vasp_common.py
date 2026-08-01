@@ -74,7 +74,7 @@ def parse_system_name(basename: str) -> Optional[Tuple[str, str, str]]:
     Rules match the original setup_elf.sh:
       - material    : substring before the first '-'
       - temperature : last numeric value followed by 'K'
-      - pressure    : first numeric value in the middle segment
+      - pressure    : numeric value followed by 'GPa' before temperature
 
     Example: Ag-H-50GPa-300K -> ('Ag', '50', '300')
     """
@@ -93,7 +93,7 @@ def parse_system_name(basename: str) -> Optional[Tuple[str, str, str]]:
     if middle.endswith("-"):
         middle = middle[:-1]
 
-    pressure_match = re.search(r"([0-9.]+)", middle)
+    pressure_match = re.search(r"([0-9]+(?:\.[0-9]+)?)GPa$", middle)
     if not pressure_match:
         return None
     pressure = pressure_match.group(1)
