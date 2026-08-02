@@ -28,6 +28,7 @@ from path_config import ENV_SUBMIT_MAX_JOBS, ENV_SUBMIT_WAIT_INTERVAL
 from vasp_common import OPT_PBS_SCRIPT, OPT_SUBDIR, iter_opt_work_dirs
 
 MARKER_NAME = ".pbs_submitted"
+REQUIRED_INPUTS = (OPT_PBS_SCRIPT, "POSCAR", "POTCAR")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -89,6 +90,20 @@ def find_opt_dirs(work_root: Path) -> List[Path]:
     ]
 
 
+def missing_required_inputs(opt_dir: Path) -> List[str]:
+    """返回提交 VASP opt 作业前缺失或为空的核心输入文件。"""
+    missing: List[str] = []
+    for name in REQUIRED_INPUTS:
+        path = opt_dir / name
+        try:
+            ready = path.is_file() and path.stat().st_size > 0
+        except OSError:
+            ready = False
+        if not ready:
+            missing.append(name)
+    return missing
+
+
 def marker_path(opt_dir: Path) -> Path:
     return opt_dir / MARKER_NAME
 
@@ -109,13 +124,16 @@ def write_marker(opt_dir: Path, job_id: str) -> None:
     marker_path(opt_dir).write_text(content, encoding="utf-8")
 
 
-def clear_markers(work_root: Path) -> int:
+def clear_markers(work_root: Path, dry_run: bool = False) -> int:
     count = 0
     for opt_dir in find_opt_dirs(work_root):
         mp = marker_path(opt_dir)
         if mp.is_file():
-            mp.unlink()
-            print(f"  cleared: {mp}")
+            if dry_run:
+                print(f"  [dry-run] would clear: {mp}")
+            else:
+                mp.unlink()
+                print(f"  cleared: {mp}")
             count += 1
     return count
 
@@ -207,16 +225,41 @@ def submit_all(
     clear_only: bool,
     dry_run: bool,
 ) -> int:
-    if resubmit or clear_only:
-        n_cleared = clear_markers(work_root)
-        print(f"Cleared {n_cleared} marker(s) under {work_root}")
-        if clear_only:
-            return 0
+    if clear_only:
+        n_cleared = clear_markers(work_root, dry_run=dry_run)
+        action = "Would clear" if dry_run else "Cleared"
+        print(f"{action} {n_cleared} marker(s) under {work_root}")
+        return 0
 
     opt_dirs = find_opt_dirs(work_root)
     if not opt_dirs:
         print(f"No {OPT_SUBDIR}/{OPT_PBS_SCRIPT} found under {work_root}")
         return 1
+
+    pending_dirs = (
+        opt_dirs
+        if resubmit
+        else [opt_dir for opt_dir in opt_dirs if not read_marker(opt_dir)]
+    )
+    invalid = [
+        (opt_dir, missing)
+        for opt_dir in pending_dirs
+        if (missing := missing_required_inputs(opt_dir))
+    ]
+    if invalid:
+        print("ERROR: submission aborted; incomplete opt input set(s):")
+        for opt_dir, missing in invalid:
+            try:
+                rel = opt_dir.relative_to(work_root)
+            except ValueError:
+                rel = opt_dir
+            print(f"  {rel}: missing or empty {', '.join(missing)}")
+        return 1
+
+    if resubmit:
+        n_cleared = clear_markers(work_root, dry_run=dry_run)
+        action = "Would clear" if dry_run else "Cleared"
+        print(f"{action} {n_cleared} marker(s) under {work_root}")
 
     submitted = 0
     skipped = 0
