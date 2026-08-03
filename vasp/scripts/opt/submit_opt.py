@@ -221,6 +221,7 @@ def submit_all(
     submitted = 0
     skipped = 0
     stopped = 0
+    failed = 0
 
     for opt_dir in opt_dirs:
         try:
@@ -253,14 +254,17 @@ def submit_all(
             submitted += 1
         except (OSError, RuntimeError) as exc:
             print(f"  ERROR: {exc}")
+            failed += 1
 
         print("---------------------------")
 
     print(
         f"Done: submitted={submitted}, skipped={skipped}, "
-        f"stopped_at_limit={stopped}, total={len(opt_dirs)}"
+        f"failed={failed}, stopped_at_limit={stopped}, total={len(opt_dirs)}"
     )
-    if submitted or (skipped and not stopped):
+    if failed or stopped:
+        return 1
+    if submitted or skipped:
         return 0
     return 1
 
