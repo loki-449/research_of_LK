@@ -128,6 +128,7 @@ def write_dat(
     stride: int = 1,
     element_order: List[str] | None = None,
 ) -> Path:
+    """按 stride 抽样写出 MSD/RMSD 表，并始终保留轨迹末帧。"""
     out = Path(outpath)
     out.parent.mkdir(parents=True, exist_ok=True)
     if element_order is None:
@@ -138,9 +139,13 @@ def write_dat(
     cols.extend(f"{elem}{RMSD_SUFFIX}" for elem in element_order)
 
     n = len(data["Time_ps"])
+    sample_indices = list(range(0, n, stride))
+    if n and sample_indices[-1] != n - 1:
+        sample_indices.append(n - 1)
+
     with out.open("w", encoding="utf-8") as f:
         f.write("# " + "  ".join(f"{c:>14s}" for c in cols) + "\n")
-        for i in range(0, n, stride):
+        for i in sample_indices:
             vals = [data["Time_ps"][i]]
             vals.extend(data[f"{elem}_MSD"][i] for elem in element_order)
             vals.extend(data[f"{elem}_RMSD"][i] for elem in element_order)
@@ -148,7 +153,7 @@ def write_dat(
 
     print(
         f"Data written to {out} "
-        f"({(n + stride - 1) // stride} rows, {len(element_order)} elements: {element_order})"
+        f"({len(sample_indices)} rows, {len(element_order)} elements: {element_order})"
     )
     return out
 
