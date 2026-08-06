@@ -123,7 +123,9 @@ def clear_markers(work_root: Path) -> int:
 def count_user_jobs() -> int:
     user = os.environ.get("USER") or os.environ.get("USERNAME")
     if not user:
-        return 0
+        raise RuntimeError(
+            "USER/USERNAME is not set; cannot safely enforce the PBS job limit"
+        )
 
     try:
         result = subprocess.run(
@@ -136,7 +138,11 @@ def count_user_jobs() -> int:
         raise RuntimeError("qstat not found; run this script on a PBS cluster")
 
     if result.returncode != 0:
-        return 0
+        err = (result.stderr or result.stdout or "").strip()
+        detail = f": {err}" if err else ""
+        raise RuntimeError(
+            f"qstat failed with exit code {result.returncode}{detail}"
+        )
 
     lines = [ln for ln in result.stdout.splitlines() if ln.strip()]
     if len(lines) <= 2:
@@ -234,9 +240,17 @@ def submit_all(
             skipped += 1
             continue
 
-        n_jobs = wait_for_slot(max_jobs, wait_interval, no_wait, dry_run)
+        try:
+            n_jobs = wait_for_slot(max_jobs, wait_interval, no_wait, dry_run)
+        except RuntimeError as exc:
+            print(f"  ERROR: cannot verify PBS job count; aborting submissions: {exc}")
+            return 1
         if n_jobs is None:
-            _, n_jobs = jobs_within_limit(max_jobs)
+            try:
+                _, n_jobs = jobs_within_limit(max_jobs)
+            except RuntimeError as exc:
+                print(f"  ERROR: cannot verify PBS job count; aborting submissions: {exc}")
+                return 1
             print(
                 f"  STOP: user job count {n_jobs} > {max_jobs} "
                 f"(qstat -u $USER check)"
