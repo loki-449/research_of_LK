@@ -66,14 +66,14 @@ class SubmitOptQstatFailureTests(unittest.TestCase):
                 stderr="cannot connect to server",
             )
 
-            with (
-                mock.patch.dict(os.environ, {"USER": "researcher"}, clear=False),
-                mock.patch.object(
-                    submit_opt.subprocess, "run", return_value=failed_qstat
-                ),
-                mock.patch.object(submit_opt, "qsub_job") as qsub_job,
+            with mock.patch.dict(
+                os.environ, {"USER": "researcher"}, clear=False
             ):
-                status, output = self.submit(root)
+                with mock.patch.object(
+                    submit_opt.subprocess, "run", return_value=failed_qstat
+                ):
+                    with mock.patch.object(submit_opt, "qsub_job") as qsub_job:
+                        status, output = self.submit(root)
 
             self.assertEqual(status, 1)
             self.assertIn("cannot verify PBS job count", output)
@@ -86,11 +86,9 @@ class SubmitOptQstatFailureTests(unittest.TestCase):
             root = Path(tmp)
             self.make_opt_dir(root)
 
-            with (
-                mock.patch.dict(os.environ, {}, clear=True),
-                mock.patch.object(submit_opt, "qsub_job") as qsub_job,
-            ):
-                status, output = self.submit(root)
+            with mock.patch.dict(os.environ, {}, clear=True):
+                with mock.patch.object(submit_opt, "qsub_job") as qsub_job:
+                    status, output = self.submit(root)
 
             self.assertEqual(status, 1)
             self.assertIn("USER/USERNAME is not set", output)
