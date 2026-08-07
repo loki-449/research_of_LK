@@ -33,6 +33,7 @@ from vasp_common import (
     find_relax_in,
     parse_qe_system,
     setup_opt_scripts,
+    validate_unique_system_targets,
 )
 from make_poscar import make_poscar_for_base
 
@@ -110,6 +111,11 @@ def main(argv: list[str] | None = None) -> int:
     systems = find_qe_system_dirs(qe_dir, pattern=args.pattern)
     if not systems:
         print(f"No system directories matched '{args.pattern}' under {qe_dir}")
+        return 1
+    try:
+        validate_unique_system_targets(systems)
+    except ValueError as exc:
+        print(f"ERROR: {exc}")
         return 1
 
     ok = 0
