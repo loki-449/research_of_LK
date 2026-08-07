@@ -127,6 +127,36 @@ def parse_qe_system(path: str | Path) -> Optional[SystemInfo]:
     )
 
 
+def validate_unique_system_targets(system_dirs: Sequence[str | Path]) -> None:
+    """确保批量 QE 目录不会映射到同一 VASP 材料/压强目录。
+
+    温度按现有约定不进入工作路径，因此同材料、同压强的多个输入必须在
+    写文件前拒绝，避免后处理体系静默覆盖先处理体系。
+    """
+    targets: Dict[Tuple[str, str], List[Path]] = {}
+    for system_dir in system_dirs:
+        info = parse_qe_system(system_dir)
+        if info is None:
+            continue
+        key = (info.material, info.pressure)
+        targets.setdefault(key, []).append(info.path)
+
+    collisions = {
+        key: paths for key, paths in targets.items() if len(paths) > 1
+    }
+    if not collisions:
+        return
+
+    details = []
+    for (material, pressure), paths in sorted(collisions.items()):
+        names = ", ".join(sorted(path.name for path in paths))
+        details.append(f"{material}/{pressure} <- {names}")
+    raise ValueError(
+        "Multiple QE systems map to the same VASP target directory: "
+        + "; ".join(details)
+    )
+
+
 # ============================================================
 # relax.in 定位与解析
 # ============================================================

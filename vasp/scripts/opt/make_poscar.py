@@ -36,6 +36,7 @@ from vasp_common import (
     parse_relax_in,
     setup_opt_scripts,
     system_base_dir,
+    validate_unique_system_targets,
 )
 
 
@@ -164,6 +165,11 @@ def batch_scan(
     systems = find_qe_system_dirs(qe_dir, pattern=pattern)
     if not systems:
         print(f"No systems matched '{pattern}' under {qe_dir}")
+        return 1
+    try:
+        validate_unique_system_targets(systems)
+    except ValueError as exc:
+        print(f"ERROR: {exc}")
         return 1
 
     ok = 0
