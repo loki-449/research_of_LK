@@ -12,8 +12,10 @@ scf_contcar_to_poscar_ELF.py — 从 opt 的 CONTCAR 复制到 scf_ELF 并改名
 from __future__ import annotations
 
 import argparse
-import shutil
+import math
+import os
 import sys
+import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "lib"))
@@ -66,6 +68,101 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def read_valid_contcar(contcar: Path) -> bytes:
+    """读取并校验完整 CONTCAR，避免用空文件或半成品覆盖既有 POSCAR。"""
+    try:
+        content = contcar.read_bytes()
+    except OSError as exc:
+        raise ValueError(f"cannot read CONTCAR: {exc}") from exc
+
+    if not content.strip():
+        raise ValueError("CONTCAR is empty")
+
+    lines = content.decode("utf-8", errors="replace").splitlines()
+    if len(lines) < 8:
+        raise ValueError(f"CONTCAR is incomplete: only {len(lines)} lines")
+
+    try:
+        scale = float(lines[1].strip())
+        lattice = [
+            [float(value) for value in lines[index].split()[:3]]
+            for index in range(2, 5)
+        ]
+    except (ValueError, IndexError) as exc:
+        raise ValueError("CONTCAR has an invalid scale or lattice") from exc
+    if (
+        not math.isfinite(scale)
+        or scale == 0
+        or any(len(vector) != 3 for vector in lattice)
+        or any(not math.isfinite(value) for vector in lattice for value in vector)
+    ):
+        raise ValueError("CONTCAR has an invalid scale or lattice")
+
+    def parse_counts(line: str) -> list[int]:
+        values = line.split()
+        if not values:
+            raise ValueError
+        counts = [int(value) for value in values]
+        if any(count < 0 for count in counts) or sum(counts) == 0:
+            raise ValueError
+        return counts
+
+    # VASP 4 格式第 6 行直接为原子数；VASP 5+ 第 6 行为元素、第 7 行为原子数。
+    try:
+        counts = parse_counts(lines[5])
+        mode_index = 6
+    except ValueError:
+        try:
+            counts = parse_counts(lines[6])
+        except ValueError as exc:
+            raise ValueError("CONTCAR has invalid atom counts") from exc
+        if len(lines[5].split()) != len(counts):
+            raise ValueError("CONTCAR element and atom-count columns differ")
+        mode_index = 7
+
+    if lines[mode_index].strip().lower().startswith("s"):
+        mode_index += 1
+    if mode_index >= len(lines) or not lines[mode_index].strip().lower().startswith(
+        ("d", "c", "k")
+    ):
+        raise ValueError("CONTCAR has no valid coordinate mode")
+
+    coordinate_start = mode_index + 1
+    atom_count = sum(counts)
+    if len(lines) < coordinate_start + atom_count:
+        raise ValueError(
+            f"CONTCAR is incomplete: expected {atom_count} atomic coordinates"
+        )
+    try:
+        coordinates = [
+            [float(value) for value in lines[index].split()[:3]]
+            for index in range(coordinate_start, coordinate_start + atom_count)
+        ]
+    except ValueError as exc:
+        raise ValueError("CONTCAR has invalid atomic coordinates") from exc
+    if any(len(vector) != 3 for vector in coordinates) or any(
+        not math.isfinite(value) for vector in coordinates for value in vector
+    ):
+        raise ValueError("CONTCAR has invalid atomic coordinates")
+
+    return content
+
+
+def atomic_write_poscar(content: bytes, poscar: Path) -> None:
+    """同目录临时写入后原子替换，写入失败时保留既有 POSCAR。"""
+    poscar.parent.mkdir(parents=True, exist_ok=True)
+    fd, temp_name = tempfile.mkstemp(prefix=f".{poscar.name}.", dir=poscar.parent)
+    temp_path = Path(temp_name)
+    try:
+        with os.fdopen(fd, "wb") as stream:
+            stream.write(content)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temp_path, poscar)
+    finally:
+        temp_path.unlink(missing_ok=True)
+
+
 def copy_contcar_to_poscar(
     contcar: Path,
     poscar: Path,
@@ -79,6 +176,12 @@ def copy_contcar_to_poscar(
         print(f"  ERROR: CONTCAR not found: {contcar}")
         return False
 
+    try:
+        content = read_valid_contcar(contcar)
+    except ValueError as exc:
+        print(f"  ERROR: refusing to replace {poscar}: {exc}")
+        return False
+
     if dry_run:
         print(f"  [dry-run] cp {contcar}")
         print(f"  [dry-run]   → {poscar}")
@@ -86,8 +189,7 @@ def copy_contcar_to_poscar(
             print(f"  [dry-run] write {poscar.parent}/ELF.pbs (LELF=TRUE)")
         return True
 
-    poscar.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(contcar, poscar)
+    atomic_write_poscar(content, poscar)
     print(f"  CONTCAR → {poscar}")
 
     if write_pbs:
