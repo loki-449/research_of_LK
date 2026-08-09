@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import os
 import re
+import tempfile
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -420,16 +421,35 @@ def cat_potcar_in_order(
     output_name: str = "POTCAR",
     remove_singles: bool = True,
 ) -> Path:
-    """Concatenate <Elem>.POTCAR files in element order into final POTCAR."""
+    """按元素顺序原子拼接 <Elem>.POTCAR，失败时保留已有目标文件。"""
     out_dir = Path(target_dir)
     final = out_dir / output_name
+    old_mode = final.stat().st_mode & 0o7777 if final.exists() else 0o644
+    temp_path: Optional[Path] = None
 
-    with final.open("wb") as out_f:
-        for elem in elements:
-            single = out_dir / f"{elem}.POTCAR"
-            if not single.is_file():
-                raise FileNotFoundError(f"Missing single-element file: {single}")
-            out_f.write(single.read_bytes())
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="wb",
+            dir=final.parent,
+            prefix=f".{final.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as out_f:
+            temp_path = Path(out_f.name)
+            for elem in elements:
+                single = out_dir / f"{elem}.POTCAR"
+                if not single.is_file():
+                    raise FileNotFoundError(f"Missing single-element file: {single}")
+                out_f.write(single.read_bytes())
+            out_f.flush()
+            os.fsync(out_f.fileno())
+
+        temp_path.chmod(old_mode)
+        os.replace(temp_path, final)
+        temp_path = None
+    finally:
+        if temp_path is not None:
+            temp_path.unlink(missing_ok=True)
 
     if remove_singles:
         for elem in elements:
