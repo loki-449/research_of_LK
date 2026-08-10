@@ -13,6 +13,7 @@ import argparse
 import os
 import subprocess
 import sys
+import tempfile
 import time
 from datetime import datetime
 from pathlib import Path
@@ -100,13 +101,53 @@ def read_marker(opt_dir: Path) -> Optional[str]:
     return mp.read_text(encoding="utf-8", errors="replace").strip()
 
 
+def reserve_submission(opt_dir: Path) -> None:
+    """排他创建提交中标记，阻止并发入口重复提交同一目录。"""
+    mp = marker_path(opt_dir)
+    created = False
+    try:
+        with mp.open("x", encoding="utf-8") as stream:
+            created = True
+            stream.write(
+                "status=submitting\n"
+                f"started_at={datetime.now().isoformat(timespec='seconds')}\n"
+                f"script={OPT_PBS_SCRIPT}\n"
+            )
+            stream.flush()
+            os.fsync(stream.fileno())
+    except Exception:
+        if created:
+            mp.unlink(missing_ok=True)
+        raise
+
+
 def write_marker(opt_dir: Path, job_id: str) -> None:
+    """原子写入已提交标记；失败时保留既有提交中标记。"""
     content = (
+        "status=submitted\n"
         f"job_id={job_id}\n"
         f"submitted_at={datetime.now().isoformat(timespec='seconds')}\n"
         f"script={OPT_PBS_SCRIPT}\n"
     )
-    marker_path(opt_dir).write_text(content, encoding="utf-8")
+    mp = marker_path(opt_dir)
+    temp_path: Optional[Path] = None
+    try:
+        fd, temp_name = tempfile.mkstemp(
+            dir=opt_dir,
+            prefix=f".{MARKER_NAME}.",
+            suffix=".tmp",
+            text=True,
+        )
+        temp_path = Path(temp_name)
+        with os.fdopen(fd, "w", encoding="utf-8") as stream:
+            stream.write(content)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temp_path, mp)
+        temp_path = None
+    finally:
+        if temp_path is not None:
+            temp_path.unlink(missing_ok=True)
 
 
 def clear_markers(work_root: Path) -> int:
@@ -229,7 +270,7 @@ def submit_all(
             rel = opt_dir
         print(f"Processing: {rel}")
 
-        if read_marker(opt_dir) and not resubmit:
+        if marker_path(opt_dir).exists() and not resubmit:
             print(f"  SKIP: already submitted ({marker_path(opt_dir)})")
             skipped += 1
             continue
@@ -244,14 +285,35 @@ def submit_all(
             stopped += 1
             break
 
+        reserved = False
         try:
+            if not dry_run:
+                reserve_submission(opt_dir)
+                reserved = True
             chmod_executable(opt_dir / OPT_PBS_SCRIPT, dry_run=dry_run)
             job_id = qsub_job(opt_dir, dry_run=dry_run)
             if not dry_run:
-                write_marker(opt_dir, job_id)
+                try:
+                    write_marker(opt_dir, job_id)
+                except OSError as exc:
+                    print(
+                        f"  WARNING: job {job_id} submitted but marker update failed: "
+                        f"{exc}; keeping the submission reservation"
+                    )
             print(f"  SUBMITTED: job {job_id}  (user jobs before submit: {n_jobs})")
             submitted += 1
+        except FileExistsError:
+            print(f"  SKIP: concurrent submission reserved ({marker_path(opt_dir)})")
+            skipped += 1
         except (OSError, RuntimeError) as exc:
+            if reserved:
+                try:
+                    marker_path(opt_dir).unlink(missing_ok=True)
+                except OSError as cleanup_exc:
+                    print(
+                        f"  WARNING: could not clear failed submission reservation: "
+                        f"{cleanup_exc}"
+                    )
             print(f"  ERROR: {exc}")
 
         print("---------------------------")
