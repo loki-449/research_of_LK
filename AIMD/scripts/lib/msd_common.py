@@ -147,7 +147,9 @@ def write_dat(
             vals = [data["Time_ps"][i]]
             vals.extend(data[f"{elem}_MSD"][i] for elem in element_order)
             vals.extend(data[f"{elem}_RMSD"][i] for elem in element_order)
-            f.write("  ".join(f"{v:14.6f}" for v in vals) + "\n")
+            formatted = [f"{vals[0]:14.6f}"]
+            formatted.extend(f"{v:14.8e}" for v in vals[1:])
+            f.write("  ".join(formatted) + "\n")
 
     print(
         f"Data written to {out} "
