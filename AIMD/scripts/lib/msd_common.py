@@ -14,8 +14,11 @@ dt 备注:
 """
 from __future__ import annotations
 
+import errno
+import os
 import re
 import shutil
+import tempfile
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Tuple
 
@@ -281,6 +284,24 @@ def published_png_path(work_root: str | Path, system_a: str) -> Path:
     return Path(work_root) / RESULT_PNG_DIR / f"{system_a}_msd_rmsd.png"
 
 
+def _atomic_copy(src: Path, dest: Path) -> None:
+    """先完整复制到目标目录临时文件，再原子替换正式产物。"""
+    fd, temp_name = tempfile.mkstemp(
+        dir=dest.parent,
+        prefix=f".{dest.name}.",
+        suffix=".tmp",
+    )
+    os.close(fd)
+    temp_path = Path(temp_name)
+    try:
+        shutil.copy2(src, temp_path)
+        with temp_path.open("rb") as temp_file:
+            os.fsync(temp_file.fileno())
+        os.replace(temp_path, dest)
+    finally:
+        temp_path.unlink(missing_ok=True)
+
+
 def publish_file(src: str | Path, dest: str | Path, keep_local: bool = False) -> Path:
     """将产物移到汇总路径（shutil.move ≡ mv）。"""
     src_p = Path(src)
@@ -288,13 +309,17 @@ def publish_file(src: str | Path, dest: str | Path, keep_local: bool = False) ->
     dest_p.parent.mkdir(parents=True, exist_ok=True)
     if not src_p.is_file():
         raise FileNotFoundError(f"Cannot publish missing file: {src_p}")
-    if dest_p.exists():
-        dest_p.unlink()
     if keep_local:
-        shutil.copy2(src_p, dest_p)
+        _atomic_copy(src_p, dest_p)
         print(f"  copied -> {dest_p} (kept local {src_p})")
     else:
-        shutil.move(str(src_p), str(dest_p))
+        try:
+            os.replace(src_p, dest_p)
+        except OSError as exc:
+            if exc.errno != errno.EXDEV:
+                raise
+            _atomic_copy(src_p, dest_p)
+            src_p.unlink()
         print(f"  mv -> {dest_p}")
     return dest_p
 
