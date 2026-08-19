@@ -28,12 +28,12 @@ from msd_common import read_potim_from_incar  # noqa: E402
 class IncarParsingTests(unittest.TestCase):
     """验证 INCAR 实数及标签分隔符解析。"""
 
-    def test_potim_before_semicolon_is_parsed(self) -> None:
-        """同一行存在后续 INCAR 标签时，POTIM 不应包含分号。"""
+    def test_potim_between_semicolon_separated_tags_is_parsed(self) -> None:
+        """POTIM 位于同一行多个 INCAR 标签之间时仍应正确解析。"""
         with tempfile.TemporaryDirectory() as tmp:
             incar = Path(tmp) / "INCAR"
             incar.write_text(
-                "POTIM = 0.5; NBLOCK = 10\n",
+                "IBRION = 0; POTIM = 0.5; NBLOCK = 10\n",
                 encoding="utf-8",
             )
 

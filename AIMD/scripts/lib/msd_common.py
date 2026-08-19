@@ -206,14 +206,15 @@ def read_potim_from_incar(incar_path: str | Path) -> float:
         line = raw.split("#", 1)[0].split("!", 1)[0].strip()
         if not line:
             continue
-        # POTIM = 1.0 或 POTIM=1.0
-        m = re.match(
-            rf"POTIM\s*=\s*({INCAR_REAL_PATTERN})(?=\s*(?:;|$))",
-            line,
-            re.IGNORECASE,
-        )
-        if m:
-            return float(m.group(1).replace("d", "e").replace("D", "E"))
+        for statement in line.split(";"):
+            # POTIM = 1.0 或 IBRION=0; POTIM=1.0; NSW=1000
+            m = re.fullmatch(
+                rf"\s*POTIM\s*=\s*({INCAR_REAL_PATTERN})\s*",
+                statement,
+                re.IGNORECASE,
+            )
+            if m:
+                return float(m.group(1).replace("d", "e").replace("D", "E"))
     raise FileNotFoundError(
         f"POTIM not found in {incar_path}. "
         "Set POTIM in AIMD/INCAR or pass --dt explicitly."
