@@ -27,6 +27,7 @@ MSD_SUFFIX = "_MSD(A2)"
 RMSD_SUFFIX = "_RMSD(A)"
 LOCAL_DAT_NAME = "msd_data.dat"
 AIMD_SUBDIR = "AIMD"
+INCAR_REAL_PATTERN = r"[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[EeDd][+-]?\d+)?"
 
 
 def read_xdatcar(path: str | Path) -> Tuple[np.ndarray, List[str]]:
@@ -206,9 +207,13 @@ def read_potim_from_incar(incar_path: str | Path) -> float:
         if not line:
             continue
         # POTIM = 1.0 或 POTIM=1.0
-        m = re.match(r"POTIM\s*=\s*([0-9.+-Ee]+)", line, re.IGNORECASE)
+        m = re.match(
+            rf"POTIM\s*=\s*({INCAR_REAL_PATTERN})(?=\s*(?:;|$))",
+            line,
+            re.IGNORECASE,
+        )
         if m:
-            return float(m.group(1))
+            return float(m.group(1).replace("d", "e").replace("D", "E"))
     raise FileNotFoundError(
         f"POTIM not found in {incar_path}. "
         "Set POTIM in AIMD/INCAR or pass --dt explicitly."
