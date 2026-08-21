@@ -30,7 +30,7 @@ class ReadXdatcarLatticeTests(unittest.TestCase):
 
     def test_npt_repeated_header_updates_frame_lattice(self) -> None:
         """晶胞变化时，相同分数坐标必须映射到不同笛卡尔位置。"""
-        content = """NpT frame 1
+        content = """Direct-coordinate NpT frame 1
 1.0
 10.0 0.0 0.0
 0.0 10.0 0.0
@@ -39,7 +39,7 @@ H
 1
 Direct configuration=     1
 0.5 0.0 0.0
-NpT frame 2
+Direct-coordinate NpT frame 2
 1.0
 12.0 0.0 0.0
 0.0 12.0 0.0

@@ -29,6 +29,17 @@ LOCAL_DAT_NAME = "msd_data.dat"
 AIMD_SUBDIR = "AIMD"
 
 
+def _is_xdatcar_frame_header(line: str) -> bool:
+    """仅匹配 XDATCAR 构型标记，避免把以 Direct/Cartesian 开头的注释当成帧。"""
+    return bool(
+        re.match(
+            r"^(?:direct|cart(?:esian)?)\s+configuration\s*=",
+            line.strip(),
+            re.IGNORECASE,
+        )
+    )
+
+
 def _parse_xdatcar_lattice(
     scale_line: str,
     lattice_lines: Sequence[str],
@@ -70,22 +81,19 @@ def _repeated_xdatcar_header(
     counts: Sequence[int],
 ) -> Optional[Tuple[np.ndarray, np.ndarray, int]]:
     """识别 NpT XDATCAR 在每帧前重复写出的 POSCAR 头。"""
-    if lines[idx].strip().lower().startswith(("direct", "cart")):
-        return None
-
     frame_idx = idx + 7
     if frame_idx >= len(lines):
         return None
-    if not lines[frame_idx].strip().lower().startswith(("direct", "cart")):
+    if not _is_xdatcar_frame_header(lines[frame_idx]):
         return None
 
     repeated_elements = lines[idx + 5].split()
     try:
         repeated_counts = list(map(int, lines[idx + 6].split()))
-    except ValueError as exc:
-        raise ValueError("Invalid atom counts in repeated XDATCAR header") from exc
+    except ValueError:
+        return None
     if repeated_elements != list(elements) or repeated_counts != list(counts):
-        raise ValueError("Atom species changed between XDATCAR configurations")
+        return None
 
     lattice, cart_scales = _parse_xdatcar_lattice(
         lines[idx + 1], lines[idx + 2 : idx + 5]
@@ -121,8 +129,8 @@ def read_xdatcar(path: str | Path) -> Tuple[np.ndarray, List[str]]:
         if repeated_header is not None:
             lattice, cart_scales, idx = repeated_header
 
-        line = lines[idx].strip().lower()
-        if line.startswith(("direct", "cart")):
+        line = lines[idx].strip()
+        if _is_xdatcar_frame_header(line):
             keyword = lines[idx].strip()
             idx += 1
             coords = []
