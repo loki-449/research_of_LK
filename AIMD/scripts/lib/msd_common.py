@@ -29,15 +29,94 @@ LOCAL_DAT_NAME = "msd_data.dat"
 AIMD_SUBDIR = "AIMD"
 
 
+def _is_xdatcar_frame_header(line: str) -> bool:
+    """仅匹配 XDATCAR 构型标记，避免把以 Direct/Cartesian 开头的注释当成帧。"""
+    normalized = line.strip().lower()
+    if normalized in {"direct", "cart", "cartesian"}:
+        return True
+    return bool(
+        re.match(
+            r"^(?:direct|cart(?:esian)?)\s+configuration\s*=",
+            normalized,
+            re.IGNORECASE,
+        )
+    )
+
+
+def _parse_xdatcar_lattice(
+    scale_line: str,
+    lattice_lines: Sequence[str],
+) -> Tuple[np.ndarray, np.ndarray]:
+    """解析 POSCAR/XDATCAR 缩放规则，返回晶格与笛卡尔坐标缩放因子。"""
+    try:
+        scales = np.array([float(value) for value in scale_line.split()])
+        raw_lattice = np.array(
+            [list(map(float, line.split()[:3])) for line in lattice_lines]
+        )
+    except ValueError as exc:
+        raise ValueError("Invalid XDATCAR lattice header") from exc
+
+    if raw_lattice.shape != (3, 3) or not np.all(np.isfinite(raw_lattice)):
+        raise ValueError("Invalid XDATCAR lattice vectors")
+
+    if len(scales) == 1:
+        scale = float(scales[0])
+        if not np.isfinite(scale) or scale == 0:
+            raise ValueError("Invalid XDATCAR scale factor")
+        if scale < 0:
+            raw_volume = abs(float(np.linalg.det(raw_lattice)))
+            if raw_volume == 0:
+                raise ValueError("Cannot apply a target volume to a singular lattice")
+            scale = (abs(scale) / raw_volume) ** (1.0 / 3.0)
+        cart_scales = np.full(3, scale)
+    elif len(scales) == 3 and np.all(np.isfinite(scales)) and np.all(scales > 0):
+        cart_scales = scales
+    else:
+        raise ValueError("XDATCAR scale line must contain one or three valid values")
+
+    return raw_lattice * cart_scales, cart_scales
+
+
+def _repeated_xdatcar_header(
+    lines: Sequence[str],
+    idx: int,
+    elements: Sequence[str],
+    counts: Sequence[int],
+) -> Optional[Tuple[np.ndarray, np.ndarray, int]]:
+    """识别 NpT XDATCAR 在每帧前重复写出的 POSCAR 头。"""
+    frame_idx = idx + 7
+    if frame_idx >= len(lines):
+        return None
+    if not _is_xdatcar_frame_header(lines[frame_idx]):
+        return None
+
+    repeated_elements = lines[idx + 5].split()
+    try:
+        repeated_counts = list(map(int, lines[idx + 6].split()))
+    except ValueError:
+        return None
+    if repeated_elements != list(elements) or repeated_counts != list(counts):
+        return None
+
+    lattice, cart_scales = _parse_xdatcar_lattice(
+        lines[idx + 1], lines[idx + 2 : idx + 5]
+    )
+    return lattice, cart_scales, frame_idx
+
+
 def read_xdatcar(path: str | Path) -> Tuple[np.ndarray, List[str]]:
-    """Read VASP XDATCAR and return (positions, element_map)."""
+    """读取 VASP XDATCAR，返回逐帧晶格换算后的笛卡尔坐标与元素映射。"""
     with open(path, encoding="utf-8", errors="replace") as f:
         lines = f.readlines()
 
-    scale = float(lines[1].strip())
-    lattice = np.array([list(map(float, line.split())) for line in lines[2:5]]) * scale
+    if len(lines) < 8:
+        raise ValueError(f"Incomplete XDATCAR header in {path}")
+
+    lattice, cart_scales = _parse_xdatcar_lattice(lines[1], lines[2:5])
     elements_raw = lines[5].split()
     counts = list(map(int, lines[6].split()))
+    if len(elements_raw) != len(counts):
+        raise ValueError(f"Element/count columns differ in {path}")
     n_atoms = sum(counts)
 
     elem_map: List[str] = []
@@ -47,8 +126,14 @@ def read_xdatcar(path: str | Path) -> Tuple[np.ndarray, List[str]]:
     frames = []
     idx = 7
     while idx < len(lines):
-        line = lines[idx].strip().lower()
-        if line.startswith(("direct", "cart")):
+        repeated_header = _repeated_xdatcar_header(
+            lines, idx, elements_raw, counts
+        )
+        if repeated_header is not None:
+            lattice, cart_scales, idx = repeated_header
+
+        line = lines[idx].strip()
+        if _is_xdatcar_frame_header(line):
             keyword = lines[idx].strip()
             idx += 1
             coords = []
@@ -60,6 +145,8 @@ def read_xdatcar(path: str | Path) -> Tuple[np.ndarray, List[str]]:
             pos = np.array(coords)
             if keyword.lower().startswith("direct"):
                 pos = pos @ lattice
+            else:
+                pos = pos * cart_scales
             frames.append(pos)
         else:
             idx += 1
