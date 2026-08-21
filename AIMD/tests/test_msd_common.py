@@ -68,9 +68,9 @@ Direct configuration=     2
 0.0 0.0 10.0
 H
 1
-Direct configuration=     1
+Direct
 0.1 0.0 0.0
-Direct configuration=     2
+Direct
 0.2 0.0 0.0
 """
         with tempfile.TemporaryDirectory() as tmp:

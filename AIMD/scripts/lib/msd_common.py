@@ -31,10 +31,13 @@ AIMD_SUBDIR = "AIMD"
 
 def _is_xdatcar_frame_header(line: str) -> bool:
     """仅匹配 XDATCAR 构型标记，避免把以 Direct/Cartesian 开头的注释当成帧。"""
+    normalized = line.strip().lower()
+    if normalized in {"direct", "cart", "cartesian"}:
+        return True
     return bool(
         re.match(
             r"^(?:direct|cart(?:esian)?)\s+configuration\s*=",
-            line.strip(),
+            normalized,
             re.IGNORECASE,
         )
     )
