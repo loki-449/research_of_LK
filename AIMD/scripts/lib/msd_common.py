@@ -60,6 +60,9 @@ def read_xdatcar(path: str | Path) -> Tuple[np.ndarray, List[str]]:
             pos = np.array(coords)
             if keyword.lower().startswith("direct"):
                 pos = pos @ lattice
+            else:
+                # VASP 对 Cartesian 原子坐标同样应用第二行的全局缩放因子。
+                pos = pos * scale
             frames.append(pos)
         else:
             idx += 1
