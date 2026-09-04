@@ -36,6 +36,8 @@ def read_xdatcar(path: str | Path) -> Tuple[np.ndarray, List[str]]:
 
     scale = float(lines[1].strip())
     lattice = np.array([list(map(float, line.split())) for line in lines[2:5]]) * scale
+    if not np.all(np.isfinite(lattice)):
+        raise ValueError(f"Non-finite lattice values found in {path}")
     elements_raw = lines[5].split()
     counts = list(map(int, lines[6].split()))
     n_atoms = sum(counts)
@@ -58,8 +60,19 @@ def read_xdatcar(path: str | Path) -> Tuple[np.ndarray, List[str]]:
                 coords.append([float(x) for x in lines[idx].split()[:3]])
                 idx += 1
             pos = np.array(coords)
+            if not np.all(np.isfinite(pos)):
+                raise ValueError(
+                    f"Non-finite coordinates found in frame {len(frames) + 1} "
+                    f"of {path}"
+                )
             if keyword.lower().startswith("direct"):
-                pos = pos @ lattice
+                with np.errstate(over="ignore", invalid="ignore"):
+                    pos = pos @ lattice
+            if not np.all(np.isfinite(pos)):
+                raise ValueError(
+                    f"Non-finite coordinates found in frame {len(frames) + 1} "
+                    f"of {path}"
+                )
             frames.append(pos)
         else:
             idx += 1
