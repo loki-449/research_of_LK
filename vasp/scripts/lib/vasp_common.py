@@ -132,7 +132,7 @@ def parse_qe_system(path: str | Path) -> Optional[SystemInfo]:
 # ============================================================
 
 def find_relax_in(system_dir: str | Path, max_depth: int = 3) -> Optional[Path]:
-    """Locate relax.in under a QE system directory."""
+    """定位 QE 体系目录下唯一明确的 relax.in。"""
     root = Path(system_dir)
     if not root.is_dir():
         return None
@@ -141,12 +141,18 @@ def find_relax_in(system_dir: str | Path, max_depth: int = 3) -> Optional[Path]:
     if direct.is_file():
         return direct
 
+    matches: List[Path] = []
     for depth in range(1, max_depth + 1):
         pattern = "/".join(["*"] * depth) + "/relax.in"
-        matches = sorted(root.glob(pattern))
-        if matches:
-            return matches[0]
-    return None
+        matches.extend(sorted(path for path in root.glob(pattern) if path.is_file()))
+
+    if len(matches) > 1:
+        candidates = ", ".join(str(path.relative_to(root)) for path in matches)
+        raise ValueError(
+            f"Multiple relax.in files found under {root}: {candidates}. "
+            "Specify the intended relax.in explicitly."
+        )
+    return matches[0] if matches else None
 
 
 def _split_section(text: str, start_key: str, end_keys: str | Sequence[str]) -> str:
