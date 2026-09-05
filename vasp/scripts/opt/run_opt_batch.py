@@ -70,7 +70,11 @@ def process_one(
         print(f"  SKIP: name parse failed ({system_dir.name})")
         return False
 
-    relax_in = find_relax_in(system_dir)
+    try:
+        relax_in = find_relax_in(system_dir)
+    except ValueError as exc:
+        print(f"  ERROR: {exc}")
+        return False
     if relax_in is None:
         print(f"  SKIP: relax.in not found")
         return False
