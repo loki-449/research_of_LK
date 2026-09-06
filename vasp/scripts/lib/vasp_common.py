@@ -29,7 +29,7 @@ from __future__ import annotations
 
 import os
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
@@ -171,6 +171,9 @@ class RelaxStructure:
     counts: List[int]
     cell_lines: List[str]
     positions: List[Tuple[str, float, float, float]]
+    position_flags: List[Optional[Tuple[bool, bool, bool]]] = field(
+        default_factory=list
+    )
 
 
 def parse_relax_in(relax_in: str | Path) -> RelaxStructure:
@@ -189,10 +192,32 @@ def parse_relax_in(relax_in: str | Path) -> RelaxStructure:
         pos_lines = pos_lines[1:]
 
     positions: List[Tuple[str, float, float, float]] = []
+    position_flags: List[Optional[Tuple[bool, bool, bool]]] = []
     for line in pos_lines:
+        line = line.split("!", 1)[0].strip()
+        if not line:
+            continue
         parts = line.split()
         if len(parts) >= 4:
             positions.append((parts[0], float(parts[1]), float(parts[2]), float(parts[3])))
+            if 4 < len(parts) < 7:
+                raise ValueError(
+                    f"Incomplete QE if_pos flags for atom '{parts[0]}' in {relax_in}"
+                )
+            flags: Optional[Tuple[bool, bool, bool]] = None
+            if len(parts) >= 7:
+                raw_flags = parts[4:7]
+                if any(flag not in {"0", "1"} for flag in raw_flags):
+                    raise ValueError(
+                        f"Invalid QE if_pos flags for atom '{parts[0]}' in {relax_in}: "
+                        f"{' '.join(raw_flags)}"
+                    )
+                flags = (
+                    raw_flags[0] == "1",
+                    raw_flags[1] == "1",
+                    raw_flags[2] == "1",
+                )
+            position_flags.append(flags)
 
     if not positions:
         raise ValueError(f"No atomic positions found in {relax_in}")
@@ -221,6 +246,7 @@ def parse_relax_in(relax_in: str | Path) -> RelaxStructure:
         counts=counts,
         cell_lines=cell_lines,
         positions=positions,
+        position_flags=position_flags,
     )
 
 
@@ -239,10 +265,26 @@ def write_poscar(structure: RelaxStructure, output: str | Path) -> Path:
         *structure.cell_lines,
         " ".join(structure.elements),
         " ".join(str(c) for c in structure.counts),
-        "Direct",
     ]
-    for _, x, y, z in structure.positions:
-        lines.append(f"  {x:.16f}  {y:.16f}  {z:.16f}")
+    flags_by_position = structure.position_flags
+    if flags_by_position and len(flags_by_position) != len(structure.positions):
+        raise ValueError("Position and QE if_pos flag counts do not match")
+
+    has_constraints = any(flags is not None for flags in flags_by_position)
+    if has_constraints:
+        lines.append("Selective dynamics")
+    lines.append("Direct")
+
+    for index, (_, x, y, z) in enumerate(structure.positions):
+        coordinate_line = f"  {x:.16f}  {y:.16f}  {z:.16f}"
+        if has_constraints:
+            flags = flags_by_position[index]
+            # QE 未写 if_pos 时三个方向默认可动，对应 VASP 的 T T T。
+            free_flags = flags if flags is not None else (True, True, True)
+            coordinate_line += "  " + "  ".join(
+                "T" if is_free else "F" for is_free in free_flags
+            )
+        lines.append(coordinate_line)
 
     out.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return out
