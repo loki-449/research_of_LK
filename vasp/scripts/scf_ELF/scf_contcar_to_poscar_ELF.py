@@ -22,7 +22,7 @@ from bootstrap import init_imports
 init_imports()
 
 from path_config import add_work_root_argument, work_root_from_args
-from scf_common import SCF_SUBDIR, setup_scf_scripts
+from scf_common import SCF_PBS_SCRIPT, SCF_SUBDIR, setup_scf_scripts
 from vasp_common import OPT_SUBDIR, iter_opt_input_files
 
 
@@ -91,8 +91,12 @@ def copy_contcar_to_poscar(
     print(f"  CONTCAR → {poscar}")
 
     if write_pbs:
-        setup_scf_scripts(poscar.parent.parent)
-        print(f"  ELF.pbs written in {poscar.parent}/ (LELF=TRUE)")
+        pbs = poscar.parent / SCF_PBS_SCRIPT
+        if pbs.is_file():
+            print(f"  existing {SCF_PBS_SCRIPT} kept in {poscar.parent}/")
+        else:
+            setup_scf_scripts(poscar.parent.parent)
+            print(f"  {SCF_PBS_SCRIPT} written in {poscar.parent}/ (LELF=TRUE)")
 
     return True
 
