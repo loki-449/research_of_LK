@@ -35,7 +35,17 @@ def read_xdatcar(path: str | Path) -> Tuple[np.ndarray, List[str]]:
         lines = f.readlines()
 
     scale = float(lines[1].strip())
-    lattice = np.array([list(map(float, line.split())) for line in lines[2:5]]) * scale
+    raw_lattice = np.array(
+        [list(map(float, line.split())) for line in lines[2:5]]
+    )
+    if scale < 0:
+        raw_volume = abs(float(np.linalg.det(raw_lattice)))
+        if raw_volume == 0:
+            raise ValueError(f"Zero-volume lattice in {path}")
+        scale = float(np.cbrt(-scale / raw_volume))
+    elif scale == 0:
+        raise ValueError(f"Invalid zero XDATCAR scale in {path}")
+    lattice = raw_lattice * scale
     elements_raw = lines[5].split()
     counts = list(map(int, lines[6].split()))
     n_atoms = sum(counts)
