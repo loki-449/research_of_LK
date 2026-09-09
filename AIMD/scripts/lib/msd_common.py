@@ -38,6 +38,11 @@ def read_xdatcar(path: str | Path) -> Tuple[np.ndarray, List[str]]:
     lattice = np.array([list(map(float, line.split())) for line in lines[2:5]]) * scale
     elements_raw = lines[5].split()
     counts = list(map(int, lines[6].split()))
+    if len(elements_raw) != len(counts):
+        raise ValueError(
+            f"Element/count column mismatch in {path}: "
+            f"{len(elements_raw)} elements but {len(counts)} counts"
+        )
     n_atoms = sum(counts)
 
     elem_map: List[str] = []
