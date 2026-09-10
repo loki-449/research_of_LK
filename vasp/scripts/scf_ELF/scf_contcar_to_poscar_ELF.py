@@ -8,6 +8,9 @@ scf_contcar_to_poscar_ELF.py — 从 opt 的 CONTCAR 复制到 scf_ELF 并改名
 基本用法:
   python scf_contcar_to_poscar_ELF.py --scan --work-root /path/to/calc
   python scf_contcar_to_poscar_ELF.py --system-dir /path/to/calc/Ag/50
+
+默认仅复制同目录 OUTCAR 已达到离子收敛的 CONTCAR；如确需使用中间结构，
+显式传入 --allow-unconverged。
 """
 from __future__ import annotations
 
@@ -24,6 +27,10 @@ init_imports()
 from path_config import add_work_root_argument, work_root_from_args
 from scf_common import SCF_SUBDIR, setup_scf_scripts
 from vasp_common import OPT_SUBDIR, iter_opt_input_files
+
+IONIC_CONVERGENCE_MARKER = (
+    "reached required accuracy - stopping structural energy minimisation"
+)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -63,7 +70,20 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Print planned actions without executing",
     )
+    parser.add_argument(
+        "--allow-unconverged",
+        action="store_true",
+        help="Allow copying CONTCAR without an ionically converged OUTCAR",
+    )
     return parser
+
+
+def has_ionic_convergence_marker(outcar: Path) -> bool:
+    """检查 OUTCAR 是否记录了结构优化达到收敛精度。"""
+    if not outcar.is_file():
+        return False
+    with outcar.open(encoding="utf-8", errors="replace") as handle:
+        return any(IONIC_CONVERGENCE_MARKER in line for line in handle)
 
 
 def copy_contcar_to_poscar(
@@ -71,12 +91,26 @@ def copy_contcar_to_poscar(
     poscar: Path,
     write_pbs: bool = False,
     dry_run: bool = False,
+    allow_unconverged: bool = False,
 ) -> bool:
     contcar = Path(contcar)
     poscar = Path(poscar)
 
     if not contcar.is_file():
         print(f"  ERROR: CONTCAR not found: {contcar}")
+        return False
+
+    outcar = contcar.with_name("OUTCAR")
+    if not allow_unconverged and not has_ionic_convergence_marker(outcar):
+        if outcar.is_file():
+            reason = f"ionic convergence marker not found in {outcar}"
+        else:
+            reason = f"OUTCAR not found: {outcar}"
+        print(f"  ERROR: {reason}")
+        print(
+            "  Refusing to promote a potentially unconverged CONTCAR; "
+            "use --allow-unconverged only for an intentional intermediate structure."
+        )
         return False
 
     if dry_run:
@@ -101,6 +135,7 @@ def process_single_system(
     base_dir: Path,
     write_pbs: bool = False,
     dry_run: bool = False,
+    allow_unconverged: bool = False,
 ) -> bool:
     contcar = base_dir / OPT_SUBDIR / "CONTCAR"
     poscar = base_dir / SCF_SUBDIR / "POSCAR"
@@ -109,13 +144,20 @@ def process_single_system(
     print(f"  from: {contcar}")
     print(f"  to:   {poscar}")
 
-    return copy_contcar_to_poscar(contcar, poscar, write_pbs=write_pbs, dry_run=dry_run)
+    return copy_contcar_to_poscar(
+        contcar,
+        poscar,
+        write_pbs=write_pbs,
+        dry_run=dry_run,
+        allow_unconverged=allow_unconverged,
+    )
 
 
 def batch_scan(
     work_root: Path,
     write_pbs: bool = False,
     dry_run: bool = False,
+    allow_unconverged: bool = False,
 ) -> int:
     work_root = Path(work_root)
 
@@ -138,7 +180,13 @@ def batch_scan(
         print(f"System: {base_dir.relative_to(work_root)}")
         print(f"  CONTCAR: {contcar}")
 
-        if copy_contcar_to_poscar(contcar, poscar, write_pbs=write_pbs, dry_run=dry_run):
+        if copy_contcar_to_poscar(
+            contcar,
+            poscar,
+            write_pbs=write_pbs,
+            dry_run=dry_run,
+            allow_unconverged=allow_unconverged,
+        ):
             ok += 1
 
     print("---------------------------")
@@ -152,7 +200,12 @@ def main(argv: list[str] | None = None) -> int:
     if args.scan:
         work_root = work_root_from_args(args)
         print(f"Work root: {work_root}")
-        return batch_scan(work_root, write_pbs=args.write_pbs, dry_run=args.dry_run)
+        return batch_scan(
+            work_root,
+            write_pbs=args.write_pbs,
+            dry_run=args.dry_run,
+            allow_unconverged=args.allow_unconverged,
+        )
 
     if args.contcar and args.output:
         poscar = Path(args.output)
@@ -162,6 +215,7 @@ def main(argv: list[str] | None = None) -> int:
             Path(args.contcar), poscar,
             write_pbs=args.write_pbs,
             dry_run=args.dry_run,
+            allow_unconverged=args.allow_unconverged,
         )
         return 0 if ok else 1
 
@@ -170,6 +224,7 @@ def main(argv: list[str] | None = None) -> int:
             Path(args.system_dir),
             write_pbs=args.write_pbs,
             dry_run=args.dry_run,
+            allow_unconverged=args.allow_unconverged,
         )
         return 0 if ok else 1
 

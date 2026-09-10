@@ -203,9 +203,10 @@ $VASP_PYTHON $SCR/scf_ELF/scf_contcar_to_poscar_ELF.py --system-dir $WR/Ag/50 --
 
 | 项 | 内容 |
 |----|------|
-| 前置 | `$WR/<A>/<B>/opt/CONTCAR` 已存在 |
+| 前置 | `$WR/<A>/<B>/opt/CONTCAR` 已存在，且同目录 `OUTCAR` 已达到离子收敛 |
 | 生成 | `scf_ELF/POSCAR`；可选 `ELF.pbs` |
 | 不自动生成 | POTCAR（需 cp 或走 `run_scf_batch`） |
+| 中间结构 | 仅在明确需要时加 `--allow-unconverged` 跳过收敛检查 |
 
 ### 3.7 `run_scf_batch.py`（旁路）
 

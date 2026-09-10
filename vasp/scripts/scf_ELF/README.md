@@ -95,6 +95,7 @@ python run_scf_batch.py $QE_ROOT --work-root $VASP_WORK_ROOT
 | 现象 | 处理 |
 |------|------|
 | CONTCAR 未找到 | 确认 opt 已收敛完成 |
+| OUTCAR 缺失或没有离子收敛标志 | 默认拒绝复制，等待 opt 收敛后重试；仅在明确需要中间结构时加 `--allow-unconverged` |
 | scf_ELF 目录不存在 | 加 `--write-pbs` 会自动创建 |
 | POSCAR 元素顺序 | 直接复制 CONTCAR，与 opt 一致 |
 
