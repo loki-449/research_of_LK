@@ -250,6 +250,7 @@ QE 文件夹名：`Ag-H-50GPa-300K`
 | **输入** | `$WR/<A>/<B>/opt/CONTCAR`（**必须 opt 已算完**） |
 | **生成物** | `POSCAR`；可选 `ELF.pbs` |
 | **生成路径** | `$WR/<A>/<B>/scf_ELF/POSCAR`，`$WR/<A>/<B>/scf_ELF/ELF.pbs` |
+| **收敛保护** | 默认要求 `opt/OUTCAR` 含离子收敛标志；有意使用中间结构时显式加 `--allow-unconverged` |
 | **依赖库** | `vasp_common.iter_opt_input_files`；`scf_common.setup_scf_scripts` |
 | **不自动生成** | POTCAR（需手动从 opt 复制或另跑 `run_scf_batch`） |
 | **VASP 运行后** | `ELFCAR`、`CHGCAR` 等 |
