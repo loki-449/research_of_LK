@@ -176,6 +176,13 @@ class RelaxStructure:
 def parse_relax_in(relax_in: str | Path) -> RelaxStructure:
     """Parse QE relax.in into structure data for POSCAR generation."""
     text = Path(relax_in).read_text(encoding="utf-8", errors="replace")
+    # QE 允许在 card 中使用行首 ! 或 # 注释；必须在定位区块前移除，
+    # 否则注释中的 card 名或三个以上字段会被误当作结构数据。
+    text = "\n".join(
+        line
+        for line in text.splitlines()
+        if not line.lstrip().startswith(("!", "#"))
+    )
 
     pos_block = _split_section(
         text, "ATOMIC_POSITIONS", ["K_POINTS", "ATOMIC_FORCES"]
