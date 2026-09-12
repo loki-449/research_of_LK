@@ -14,6 +14,7 @@ dt 备注:
 """
 from __future__ import annotations
 
+import os
 import re
 import shutil
 from pathlib import Path
@@ -279,6 +280,34 @@ def published_dat_path(work_root: str | Path, system_a: str) -> Path:
 
 def published_png_path(work_root: str | Path, system_a: str) -> Path:
     return Path(work_root) / RESULT_PNG_DIR / f"{system_a}_msd_rmsd.png"
+
+
+def system_from_canonical_dat_path(
+    datafile: str | Path, work_root: str | Path
+) -> Optional[str]:
+    """从工作根目录下的标准 dat 路径推断体系名；非标准路径返回 None。"""
+    # 保留标准布局中的目录名和末级文件名；只解析布局上级来确认它确实
+    # 位于 work_root 下，避免目录或文件符号链接抹掉体系身份。
+    data_path = Path(os.path.abspath(os.fspath(Path(datafile).expanduser())))
+    root = Path(work_root).expanduser().resolve()
+
+    archive_suffix = "_msd_data.dat"
+    if (
+        data_path.parent.name == RESULT_DAT_DIR
+        and data_path.parent.parent.resolve() == root
+        and data_path.name.endswith(archive_suffix)
+    ):
+        system_a = data_path.name[: -len(archive_suffix)]
+        return system_a or None
+
+    if (
+        data_path.name == LOCAL_DAT_NAME
+        and data_path.parent.parent.resolve() == root
+        and data_path.parent.name
+    ):
+        return data_path.parent.name
+
+    return None
 
 
 def publish_file(src: str | Path, dest: str | Path, keep_local: bool = False) -> Path:
