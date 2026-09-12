@@ -24,6 +24,7 @@ from msd_common import (
     parse_elements_from_columns,
     publish_png,
     resolve_dat_for_plot,
+    system_from_canonical_dat_path,
 )
 from plot_line_template import do_plot
 
@@ -106,6 +107,15 @@ def main(argv=None) -> int:
                 return 1
         else:
             print(f"ERROR: {exc}")
+            return 1
+
+    if system_a and work_root:
+        data_system = system_from_canonical_dat_path(datafile, work_root)
+        if data_system and data_system != system_a:
+            print(
+                "ERROR: datafile belongs to system "
+                f"'{data_system}', but --system-dir selects '{system_a}'"
+            )
             return 1
 
     if system_a is None and work_root and datafile.name.endswith("_msd_data.dat"):
