@@ -128,7 +128,7 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         timestep, dt_src = resolve_dt(aimd_dir_of(system_dir), cli_dt=args.dt)
-    except FileNotFoundError as exc:
+    except (FileNotFoundError, ValueError) as exc:
         print(f"ERROR: {exc}")
         return 1
 

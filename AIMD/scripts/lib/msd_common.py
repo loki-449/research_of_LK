@@ -14,6 +14,7 @@ dt 备注:
 """
 from __future__ import annotations
 
+import math
 import re
 import shutil
 from pathlib import Path
@@ -224,6 +225,9 @@ def resolve_dt(
     incar = aimd / "INCAR"
     if cli_dt is not None:
         src = f"CLI --dt={cli_dt}"
+        timestep = float(cli_dt)
+        if not math.isfinite(timestep) or timestep <= 0:
+            raise ValueError(f"XDATCAR frame timestep must be finite and > 0 fs ({src})")
         if incar.is_file():
             try:
                 potim = read_potim_from_incar(incar)
@@ -234,7 +238,7 @@ def resolve_dt(
                     )
             except FileNotFoundError:
                 pass
-        return float(cli_dt), src
+        return timestep, src
 
     if not incar.is_file():
         raise FileNotFoundError(
@@ -242,6 +246,8 @@ def resolve_dt(
             "Cannot resolve timestep."
         )
     potim = read_potim_from_incar(incar)
+    if not math.isfinite(potim) or potim <= 0:
+        raise ValueError(f"POTIM must be finite and > 0 fs ({incar}: {potim})")
     return potim, f"INCAR POTIM={potim} ({incar})"
 
 
