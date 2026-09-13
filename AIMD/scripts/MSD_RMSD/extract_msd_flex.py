@@ -116,7 +116,7 @@ def extract_one(
 
     try:
         timestep, dt_src = resolve_dt(aimd_dir, cli_dt=dt)
-    except FileNotFoundError as exc:
+    except (FileNotFoundError, ValueError) as exc:
         print(f"  ERROR: {exc}")
         return False
 
