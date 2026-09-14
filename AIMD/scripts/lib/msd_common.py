@@ -29,6 +29,49 @@ LOCAL_DAT_NAME = "msd_data.dat"
 AIMD_SUBDIR = "AIMD"
 
 
+def _looks_like_coordinate_line(line: str) -> bool:
+    """判断一行是否至少以三个浮点坐标开头。"""
+    parts = line.split()
+    if len(parts) < 3:
+        return False
+    try:
+        tuple(float(value) for value in parts[:3])
+    except ValueError:
+        return False
+    return True
+
+
+def _starts_repeated_xdatcar_header(
+    lines: Sequence[str],
+    idx: int,
+    elements: Sequence[str],
+    counts: Sequence[int],
+) -> bool:
+    """识别 variable-cell XDATCAR 在下一帧前重复的完整 POSCAR 头。"""
+    if idx + 7 >= len(lines):
+        return False
+    marker = lines[idx + 7].strip().lower()
+    if not marker.startswith(("direct", "cart")):
+        return False
+    if lines[idx + 5].split() != list(elements):
+        return False
+    try:
+        repeated_counts = list(map(int, lines[idx + 6].split()))
+        scale_values = [float(value) for value in lines[idx + 1].split()]
+        lattice = [
+            [float(value) for value in line.split()[:3]]
+            for line in lines[idx + 2 : idx + 5]
+        ]
+    except ValueError:
+        return False
+    return (
+        repeated_counts == list(counts)
+        and len(scale_values) in (1, 3)
+        and len(lattice) == 3
+        and all(len(vector) == 3 for vector in lattice)
+    )
+
+
 def read_xdatcar(path: str | Path) -> Tuple[np.ndarray, List[str]]:
     """Read VASP XDATCAR and return (positions, element_map)."""
     with open(path, encoding="utf-8", errors="replace") as f:
@@ -57,6 +100,21 @@ def read_xdatcar(path: str | Path) -> Tuple[np.ndarray, List[str]]:
                     break
                 coords.append([float(x) for x in lines[idx].split()[:3]])
                 idx += 1
+            next_idx = idx
+            while next_idx < len(lines) and not lines[next_idx].strip():
+                next_idx += 1
+            if (
+                next_idx < len(lines)
+                and _looks_like_coordinate_line(lines[next_idx])
+                and not _starts_repeated_xdatcar_header(
+                    lines, next_idx, elements_raw, counts
+                )
+            ):
+                raise ValueError(
+                    f"Frame {len(frames) + 1} in {path} contains more than "
+                    f"{n_atoms} coordinate rows; the XDATCAR atom counts are "
+                    "smaller than the trajectory frame"
+                )
             pos = np.array(coords)
             if keyword.lower().startswith("direct"):
                 pos = pos @ lattice
