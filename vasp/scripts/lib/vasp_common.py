@@ -98,7 +98,13 @@ def parse_system_name(basename: str) -> Optional[Tuple[str, str, str]]:
         return None
     pressure = pressure_match.group(1)
 
-    if not material or not pressure or not temperature:
+    if (
+        not material
+        or not pressure
+        or not temperature
+        or material in {".", ".."}
+        or pressure in {".", ".."}
+    ):
         return None
     return material, pressure, temperature
 
