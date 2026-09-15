@@ -40,6 +40,18 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 DEFAULT_PBE_LIB = "/home/test1/hhy/basic/psudopotential/PAW-GGA-PBE"
 
 COORD_KEYWORDS = frozenset({"crystal", "alat", "bohr", "angstrom"})
+QE_POSITION_END_CARDS = (
+    "ATOMIC_FORCES",
+    "ATOMIC_SPECIES",
+    "ATOMIC_VELOCITIES",
+    "CELL_PARAMETERS",
+    "CONSTRAINTS",
+    "HUBBARD",
+    "K_POINTS",
+    "ADDITIONAL_K_POINTS",
+    "OCCUPATIONS",
+    "SOLVENTS",
+)
 
 # ============================================================
 # 子目录名称常量
@@ -150,16 +162,25 @@ def find_relax_in(system_dir: str | Path, max_depth: int = 3) -> Optional[Path]:
 
 
 def _split_section(text: str, start_key: str, end_keys: str | Sequence[str]) -> str:
-    if start_key not in text:
+    def card_match(key: str, source: str):
+        return re.search(
+            rf"^[ \t]*{re.escape(key)}(?=\s|\{{|\(|$)",
+            source,
+            flags=re.IGNORECASE | re.MULTILINE,
+        )
+
+    start = card_match(start_key, text)
+    if start is None:
         raise ValueError(f"Section '{start_key}' not found")
-    block = text.split(start_key, 1)[1]
+    block = text[start.end() :]
     if isinstance(end_keys, str):
         end_keys = [end_keys]
 
     cut = len(block)
     for end_key in end_keys:
-        if end_key in block:
-            cut = min(cut, block.index(end_key))
+        end = card_match(end_key, block)
+        if end is not None:
+            cut = min(cut, end.start())
     return block[:cut]
 
 
@@ -177,9 +198,7 @@ def parse_relax_in(relax_in: str | Path) -> RelaxStructure:
     """Parse QE relax.in into structure data for POSCAR generation."""
     text = Path(relax_in).read_text(encoding="utf-8", errors="replace")
 
-    pos_block = _split_section(
-        text, "ATOMIC_POSITIONS", ["K_POINTS", "ATOMIC_FORCES"]
-    )
+    pos_block = _split_section(text, "ATOMIC_POSITIONS", QE_POSITION_END_CARDS)
     pos_lines = [
         line.strip()
         for line in pos_block.strip().splitlines()
