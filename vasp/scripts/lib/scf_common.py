@@ -48,10 +48,19 @@ NCORE = 4
 """
 
 
-def setup_scf_scripts(base_dir: str | Path) -> Path:
-    """Create scf_ELF directory and write scf (LELF=TRUE) run script."""
+def setup_scf_scripts(
+    base_dir: str | Path,
+    overwrite: bool = True,
+) -> Path:
+    """建立 scf_ELF 目录并按需写入 ELF 计算脚本。
+
+    ``overwrite=False`` 用于可重复执行的自动部署，避免覆盖用户已定制的
+    队列、资源和 INCAR 参数；显式生成入口保留原有覆盖行为。
+    """
     scf_dir = Path(base_dir) / SCF_SUBDIR
-    write_run_script(scf_dir, SCF_INCAR, filename=SCF_PBS_SCRIPT)
+    script = scf_dir / SCF_PBS_SCRIPT
+    if overwrite or not script.is_file():
+        write_run_script(scf_dir, SCF_INCAR, filename=SCF_PBS_SCRIPT)
     return scf_dir
 
 
@@ -80,7 +89,7 @@ def deploy_scf_system(
 ) -> Tuple[RelaxStructure, Dict[str, Dict[str, Any]]]:
     """Full deploy for scf: run script + POSCAR + POTCAR in scf_ELF."""
     structure = parse_relax_in(relax_in)
-    setup_scf_scripts(base_dir)
+    setup_scf_scripts(base_dir, overwrite=False)
     deploy_poscar_to_scf(structure, base_dir)
     sources = deploy_potcar_to_scf(structure.elements, base_dir, pbe_lib=pbe_lib)
     return structure, sources
