@@ -21,7 +21,7 @@ from bootstrap import init_imports
 init_imports()
 
 from path_config import add_work_root_argument, work_root_from_args
-from scf_common import SCF_SUBDIR, deploy_scf_system
+from scf_common import SCF_PBS_SCRIPT, SCF_SUBDIR, deploy_scf_system
 from vasp_common import (
     DEFAULT_PBE_LIB,
     find_qe_system_dirs,
@@ -88,9 +88,17 @@ def process_one(
         print(f"  [dry-run] would create {SCF_SUBDIR} with PBS/POSCAR/POTCAR")
         return True
 
+    elf_pbs = base_dir / SCF_SUBDIR / SCF_PBS_SCRIPT
+    pbs_existed = elf_pbs.is_file()
     try:
         structure, sources = deploy_scf_system(relax_in, base_dir, pbe_lib=pbe_lib)
-        print(f"  {SCF_SUBDIR}/ELF.pbs written (ELF INCAR, LELF=TRUE)")
+        if pbs_existed:
+            print(f"  existing {SCF_SUBDIR}/{SCF_PBS_SCRIPT} kept")
+        else:
+            print(
+                f"  {SCF_SUBDIR}/{SCF_PBS_SCRIPT} written "
+                "(ELF INCAR, LELF=TRUE)"
+            )
     except (ValueError, FileNotFoundError, OSError) as exc:
         print(f"  ERROR: {exc}")
         if (base_dir / SCF_SUBDIR / "POSCAR").is_file():
