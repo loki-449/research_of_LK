@@ -555,10 +555,19 @@ def write_run_script(
 # opt 工作目录操作
 # ============================================================
 
-def setup_opt_scripts(base_dir: str | Path) -> Path:
-    """Create opt directory and write opt (Relaxation) run script."""
+def setup_opt_scripts(
+    base_dir: str | Path,
+    overwrite: bool = True,
+) -> Path:
+    """建立 opt 目录并按需写入结构优化脚本。
+
+    ``overwrite=False`` 用于可重复执行的自动部署，避免覆盖用户已定制的
+    队列、资源和 INCAR 参数；显式生成入口保留原有覆盖行为。
+    """
     opt_dir = Path(base_dir) / OPT_SUBDIR
-    write_run_script(opt_dir, OPT_INCAR, filename=OPT_PBS_SCRIPT)
+    script = opt_dir / OPT_PBS_SCRIPT
+    if overwrite or not script.is_file():
+        write_run_script(opt_dir, OPT_INCAR, filename=OPT_PBS_SCRIPT)
     return opt_dir
 
 
@@ -587,7 +596,7 @@ def deploy_opt_system(
 ) -> Tuple[RelaxStructure, Dict[str, Dict[str, Any]]]:
     """Full deploy for opt: run script + POSCAR + POTCAR in opt."""
     structure = parse_relax_in(relax_in)
-    setup_opt_scripts(base_dir)
+    setup_opt_scripts(base_dir, overwrite=False)
     deploy_poscar_to_opt(structure, base_dir)
     sources = deploy_potcar_to_opt(structure.elements, base_dir, pbe_lib=pbe_lib)
     return structure, sources

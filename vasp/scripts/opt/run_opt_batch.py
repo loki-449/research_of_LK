@@ -90,9 +90,14 @@ def process_one(
         print(f"  [dry-run] would create {OPT_SUBDIR} with PBS/POSCAR/POTCAR")
         return True
 
+    opt_pbs = base_dir / OPT_SUBDIR / OPT_PBS_SCRIPT
+    pbs_existed = opt_pbs.is_file()
     try:
         structure, sources = deploy_opt_system(relax_in, base_dir, pbe_lib=pbe_lib)
-        print(f"  {OPT_SUBDIR}/{OPT_PBS_SCRIPT} written (Relaxation INCAR)")
+        if pbs_existed:
+            print(f"  existing {OPT_SUBDIR}/{OPT_PBS_SCRIPT} kept")
+        else:
+            print(f"  {OPT_SUBDIR}/{OPT_PBS_SCRIPT} written (Relaxation INCAR)")
     except (ValueError, FileNotFoundError, OSError) as exc:
         print(f"  ERROR: {exc}")
         if (base_dir / OPT_SUBDIR / "POSCAR").is_file():
