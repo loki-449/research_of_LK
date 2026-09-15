@@ -90,8 +90,13 @@ def setup_one_system(
         print(msg)
         return True
 
-    opt_dir = setup_opt_scripts(target_dir)
-    print(f"  {opt_dir.name}/{OPT_PBS_SCRIPT} written (Relaxation INCAR)")
+    opt_pbs = target_dir / OPT_SUBDIR / OPT_PBS_SCRIPT
+    pbs_existed = opt_pbs.is_file()
+    opt_dir = setup_opt_scripts(target_dir, overwrite=False)
+    if pbs_existed:
+        print(f"  existing {opt_dir.name}/{OPT_PBS_SCRIPT} kept")
+    else:
+        print(f"  {opt_dir.name}/{OPT_PBS_SCRIPT} written (Relaxation INCAR)")
 
     if with_poscar:
         make_poscar_for_base(relax_in, target_dir, write_pbs=False)
