@@ -506,6 +506,22 @@ KGAMMA = .TRUE.
 """
 
 
+def pressure_gpa_from_base_dir(base_dir: str | Path) -> Optional[float]:
+    """从 ``<材料>/<压强>`` 体系基目录读取以 GPa 为单位的目标压强。"""
+    raw = Path(base_dir).name
+    if not re.fullmatch(r"[0-9]+(?:\.[0-9]+)?", raw):
+        return None
+    return float(raw)
+
+
+def opt_incar_for_pressure(pressure_gpa: Optional[float]) -> str:
+    """为变胞优化生成 INCAR，并把 GPa 转换为 VASP 使用的 kB。"""
+    if pressure_gpa is None:
+        return OPT_INCAR
+    pstress_kbar = pressure_gpa * 10.0
+    return OPT_INCAR + f"PSTRESS = {pstress_kbar:.12g}\n"
+
+
 # ============================================================
 # 体系目录与工作目录管理（共享）
 # ============================================================
@@ -558,7 +574,12 @@ def write_run_script(
 def setup_opt_scripts(base_dir: str | Path) -> Path:
     """Create opt directory and write opt (Relaxation) run script."""
     opt_dir = Path(base_dir) / OPT_SUBDIR
-    write_run_script(opt_dir, OPT_INCAR, filename=OPT_PBS_SCRIPT)
+    pressure_gpa = pressure_gpa_from_base_dir(base_dir)
+    write_run_script(
+        opt_dir,
+        opt_incar_for_pressure(pressure_gpa),
+        filename=OPT_PBS_SCRIPT,
+    )
     return opt_dir
 
 
@@ -602,4 +623,11 @@ def write_opt_pbs(
     filename: str = OPT_PBS_SCRIPT,
 ) -> Path:
     """Write relaxation PBS script to given directory."""
-    return write_run_script(target_dir, OPT_INCAR, filename=filename)
+    target = Path(target_dir)
+    base_dir = target.parent if target.name == OPT_SUBDIR else target
+    pressure_gpa = pressure_gpa_from_base_dir(base_dir)
+    return write_run_script(
+        target,
+        opt_incar_for_pressure(pressure_gpa),
+        filename=filename,
+    )
