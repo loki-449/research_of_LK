@@ -105,6 +105,9 @@ QE 文件夹名：`Ag-H-50GPa-300K`
 **opt 工作目录：** `$VASP_WORK_ROOT/Ag/50/opt/`  
 **scf_ELF 工作目录：** `$VASP_WORK_ROOT/Ag/50/scf_ELF/`
 
+opt 使用 `ISIF=3` 变胞优化时，脚本会从体系基目录的压强 B 读取目标外压，
+按 `1 GPa = 10 kB` 转换并在 `opt.pbs` 的 INCAR 段写入 `PSTRESS`。
+
 ---
 
 ## 3. 全部脚本说明（用法 · 生成物 · 路径）
