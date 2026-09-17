@@ -474,7 +474,7 @@ PBS_HEADER = """#!/bin/bash
 #PBS -l nodes=1:ppn=64
 #PBS -q song
 #PBS -j n
-cd $PBS_O_WORKDIR
+cd "$PBS_O_WORKDIR" || exit 1
 module add oneapi/mpi/latest > /dev/null 2>&1
 module add oneapi/compiler/latest > /dev/null 2>&1
 module add oneapi/mkl/latest > /dev/null 2>&1
