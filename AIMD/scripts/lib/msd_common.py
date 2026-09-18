@@ -14,10 +14,11 @@ dt 备注:
 """
 from __future__ import annotations
 
+import os
 import re
 import shutil
 from pathlib import Path
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import Dict, List, Optional, Sequence, TextIO, Tuple
 
 import numpy as np
 
@@ -29,10 +30,16 @@ LOCAL_DAT_NAME = "msd_data.dat"
 AIMD_SUBDIR = "AIMD"
 
 
-def read_xdatcar(path: str | Path) -> Tuple[np.ndarray, List[str]]:
+def read_xdatcar(
+    path: str | Path,
+    stream: TextIO | None = None,
+) -> Tuple[np.ndarray, List[str]]:
     """Read VASP XDATCAR and return (positions, element_map)."""
-    with open(path, encoding="utf-8", errors="replace") as f:
-        lines = f.readlines()
+    if stream is None:
+        with open(path, encoding="utf-8", errors="replace") as f:
+            lines = f.readlines()
+    else:
+        lines = stream.readlines()
 
     scale = float(lines[1].strip())
     lattice = np.array([list(map(float, line.split())) for line in lines[2:5]]) * scale
@@ -127,7 +134,9 @@ def write_dat(
     outpath: str | Path,
     stride: int = 1,
     element_order: List[str] | None = None,
+    protected_files: Sequence[TextIO] = (),
 ) -> Path:
+    """写出数据表，并在截断前拒绝与受保护输入相同的文件。"""
     out = Path(outpath)
     out.parent.mkdir(parents=True, exist_ok=True)
     if element_order is None:
@@ -138,13 +147,29 @@ def write_dat(
     cols.extend(f"{elem}{RMSD_SUFFIX}" for elem in element_order)
 
     n = len(data["Time_ps"])
-    with out.open("w", encoding="utf-8") as f:
-        f.write("# " + "  ".join(f"{c:>14s}" for c in cols) + "\n")
-        for i in range(0, n, stride):
-            vals = [data["Time_ps"][i]]
-            vals.extend(data[f"{elem}_MSD"][i] for elem in element_order)
-            vals.extend(data[f"{elem}_RMSD"][i] for elem in element_order)
-            f.write("  ".join(f"{v:14.6f}" for v in vals) + "\n")
+    fd: Optional[int] = os.open(out, os.O_WRONLY | os.O_CREAT, 0o666)
+    try:
+        output_stat = os.fstat(fd)
+        for protected in protected_files:
+            protected_stat = os.fstat(protected.fileno())
+            if (
+                output_stat.st_dev == protected_stat.st_dev
+                and output_stat.st_ino == protected_stat.st_ino
+            ):
+                raise ValueError(f"output path aliases protected input: {out}")
+
+        os.ftruncate(fd, 0)
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            fd = None
+            f.write("# " + "  ".join(f"{c:>14s}" for c in cols) + "\n")
+            for i in range(0, n, stride):
+                vals = [data["Time_ps"][i]]
+                vals.extend(data[f"{elem}_MSD"][i] for elem in element_order)
+                vals.extend(data[f"{elem}_RMSD"][i] for elem in element_order)
+                f.write("  ".join(f"{v:14.6f}" for v in vals) + "\n")
+    finally:
+        if fd is not None:
+            os.close(fd)
 
     print(
         f"Data written to {out} "

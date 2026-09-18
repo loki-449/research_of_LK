@@ -97,6 +97,14 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def paths_refer_to_same_file(left: Path, right: Path) -> bool:
+    """判断两个路径是否指向同一文件，包括硬链接与符号链接。"""
+    try:
+        return left.samefile(right)
+    except OSError:
+        return left.resolve() == right.resolve()
+
+
 def extract_one(
     xdatcar: Path,
     work_root: Path | None,
@@ -131,18 +139,36 @@ def extract_one(
         print(f"  [dry-run] would write + publish under {wr}")
         return True
 
-    positions, elem_map = read_xdatcar(xdatcar)
-    elems = elements or unique_elements(elem_map, order=element_order)
-    print(
-        f"  frames: {positions.shape[0]}, atoms: {positions.shape[1]}, "
-        f"elements: {elems}"
-    )
+    input_file = xdatcar.open(encoding="utf-8", errors="replace")
+    try:
+        if paths_refer_to_same_file(xdatcar, local_out):
+            print(f"  ERROR: output path aliases input XDATCAR: {local_out}")
+            return False
 
-    results = compute_msd_by_element(
-        positions, timestep, elem_map, elements=elems
-    )
-    data = results_to_table(results)
-    write_dat(data, local_out, stride=stride, element_order=elems)
+        positions, elem_map = read_xdatcar(xdatcar, stream=input_file)
+        elems = elements or unique_elements(elem_map, order=element_order)
+        print(
+            f"  frames: {positions.shape[0]}, atoms: {positions.shape[1]}, "
+            f"elements: {elems}"
+        )
+
+        results = compute_msd_by_element(
+            positions, timestep, elem_map, elements=elems
+        )
+        data = results_to_table(results)
+        try:
+            write_dat(
+                data,
+                local_out,
+                stride=stride,
+                element_order=elems,
+                protected_files=(input_file,),
+            )
+        except ValueError as exc:
+            print(f"  ERROR: {exc}")
+            return False
+    finally:
+        input_file.close()
 
     if not no_publish:
         ensure_result_dirs(wr)
