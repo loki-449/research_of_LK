@@ -22,9 +22,25 @@ from msd_common import (
     ensure_result_dirs,
     iter_aimd_xdatcars,
     published_dat_path,
+    published_png_path,
     system_dir_from_xdatcar,
 )
 from extract_msd_flex import extract_one
+
+
+def plot_system(work_root: Path, xdat: Path, keep_local: bool) -> bool:
+    """从已发布的 DAT 绘图；返回绘图入口是否成功。"""
+    from plot_msd_flex import main as plot_main
+
+    argv = [
+        "--work-root",
+        str(work_root),
+        "--system-dir",
+        str(system_dir_from_xdatcar(xdat)),
+    ]
+    if keep_local:
+        argv.append("--keep-local")
+    return plot_main(argv) == 0
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -69,7 +85,15 @@ def main(argv: list[str] | None = None) -> int:
         system_a = system_dir_from_xdatcar(xdat).name
         print("---------------------------")
         if args.skip_existing and published_dat_path(work_root, system_a).is_file():
-            print(f"SKIP: {system_a} (archive dat exists)")
+            print(f"SKIP extract: {system_a} (archive dat exists)")
+            if (
+                args.with_plot
+                and not args.dry_run
+                and not published_png_path(work_root, system_a).is_file()
+            ):
+                if not plot_system(work_root, xdat, args.keep_local):
+                    print(f"ERROR: plot failed for {system_a}")
+                    continue
             ok += 1
             continue
 
@@ -87,17 +111,7 @@ def main(argv: list[str] | None = None) -> int:
         ):
             ok += 1
             if args.with_plot and not args.dry_run:
-                from plot_msd_flex import main as plot_main
-
-                plot_main(
-                    [
-                        "--work-root",
-                        str(work_root),
-                        "--system-dir",
-                        str(system_dir_from_xdatcar(xdat)),
-                    ]
-                    + (["--keep-local"] if args.keep_local else [])
-                )
+                plot_system(work_root, xdat, args.keep_local)
 
     print("---------------------------")
     print(f"Finished: {ok}/{len(files)} systems")
