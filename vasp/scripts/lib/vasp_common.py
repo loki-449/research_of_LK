@@ -163,6 +163,88 @@ def _split_section(text: str, start_key: str, end_keys: str | Sequence[str]) -> 
     return block[:cut]
 
 
+def _qe_namelist_for_matching(text: str, name: str) -> Optional[str]:
+    """提取 QE namelist，并屏蔽注释及引号内文本以供键值匹配。"""
+    marker = f"&{name}".lower()
+    quote: Optional[str] = None
+    in_comment = False
+    start: Optional[int] = None
+    idx = 0
+    while idx < len(text):
+        char = text[idx]
+        if in_comment:
+            if char == "\n":
+                in_comment = False
+            idx += 1
+            continue
+        if quote is not None:
+            if char == quote:
+                if idx + 1 < len(text) and text[idx + 1] == quote:
+                    idx += 2
+                    continue
+                quote = None
+            idx += 1
+            continue
+        if char in ("!", "#"):
+            in_comment = True
+            idx += 1
+            continue
+        if char in ("'", '"'):
+            quote = char
+            idx += 1
+            continue
+        if text[idx : idx + len(marker)].lower() == marker:
+            after = idx + len(marker)
+            if after == len(text) or not (text[after].isalnum() or text[after] == "_"):
+                start = after
+                break
+        idx += 1
+
+    if start is None:
+        return None
+
+    body: List[str] = []
+    quote = None
+    in_comment = False
+    idx = start
+    while idx < len(text):
+        char = text[idx]
+        if in_comment:
+            if char == "\n":
+                in_comment = False
+                body.append(char)
+            idx += 1
+            continue
+        if quote is not None:
+            if char == quote:
+                if idx + 1 < len(text) and text[idx + 1] == quote:
+                    body.extend((" ", " "))
+                    idx += 2
+                    continue
+                quote = None
+            body.append(" ")
+            idx += 1
+            continue
+        if char in ("!", "#"):
+            in_comment = True
+            idx += 1
+            continue
+        if char in ("'", '"'):
+            quote = char
+            body.append(" ")
+            idx += 1
+            continue
+        if char == "/":
+            return "".join(body)
+        if text[idx : idx + 4].lower() == "&end":
+            after = idx + 4
+            if after == len(text) or not (text[after].isalnum() or text[after] == "_"):
+                return "".join(body)
+        body.append(char)
+        idx += 1
+    return None
+
+
 @dataclass
 class RelaxStructure:
     """Structure extracted from QE relax.in."""
@@ -176,6 +258,13 @@ class RelaxStructure:
 def parse_relax_in(relax_in: str | Path) -> RelaxStructure:
     """Parse QE relax.in into structure data for POSCAR generation."""
     text = Path(relax_in).read_text(encoding="utf-8", errors="replace")
+    system_namelist = _qe_namelist_for_matching(text, "SYSTEM")
+    nat_match = (
+        re.search(r"\bnat\s*=\s*(\d+)", system_namelist, re.IGNORECASE)
+        if system_namelist is not None
+        else None
+    )
+    declared_nat = int(nat_match.group(1)) if nat_match else None
 
     pos_block = _split_section(
         text, "ATOMIC_POSITIONS", ["K_POINTS", "ATOMIC_FORCES"]
@@ -196,6 +285,11 @@ def parse_relax_in(relax_in: str | Path) -> RelaxStructure:
 
     if not positions:
         raise ValueError(f"No atomic positions found in {relax_in}")
+    if declared_nat is not None and len(positions) < declared_nat:
+        raise ValueError(
+            f"Expected nat={declared_nat} atomic positions in {relax_in}, "
+            f"got {len(positions)}"
+        )
 
     elements: List[str] = []
     for elem, _, _, _ in positions:
