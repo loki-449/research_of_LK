@@ -185,7 +185,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     xdat = Path(args.xdatcar)
-    wr = resolve_work_root(args.work_root) if args.work_root else system_dir_from_xdatcar(xdat).parent
+    wr = resolve_work_root(args.work_root)
     out = Path(args.output) if args.output else None
     ok = extract_one(
         xdat,
