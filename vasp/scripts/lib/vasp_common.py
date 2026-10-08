@@ -266,7 +266,10 @@ def parse_potcar_zval(potcar: str | Path) -> float:
     for line in text.splitlines()[:30]:
         match = re.search(r"ZVAL\s*=\s*([0-9.]+)", line, re.IGNORECASE)
         if match:
-            return float(match.group(1))
+            try:
+                return float(match.group(1))
+            except ValueError:
+                return 0.0
     return 0.0
 
 
@@ -275,7 +278,8 @@ def parse_potcar_date(potcar: str | Path) -> datetime:
 
     Example first line: ' PAW_PBE H1.25 07Sep2000'
     """
-    first = Path(potcar).read_text(encoding="utf-8", errors="replace").splitlines()[0].strip()
+    with Path(potcar).open(encoding="utf-8", errors="replace") as handle:
+        first = handle.readline().strip()
     match = re.search(r"(\d{2})([A-Za-z]{3})(\d{4})\s*$", first)
     if not match:
         return datetime.min
@@ -289,7 +293,8 @@ def parse_potcar_date(potcar: str | Path) -> datetime:
 
 def parse_potcar_date_str(potcar: str | Path) -> str:
     """Return date string from POTCAR first line, e.g. '07Sep2000'."""
-    first = Path(potcar).read_text(encoding="utf-8", errors="replace").splitlines()[0].strip()
+    with Path(potcar).open(encoding="utf-8", errors="replace") as handle:
+        first = handle.readline().strip()
     match = re.search(r"(\d{2}[A-Za-z]{3}\d{4})\s*$", first)
     return match.group(1) if match else "unknown"
 
@@ -351,6 +356,8 @@ def select_best_potcar_file(candidates: Sequence[Path]) -> Optional[Path]:
         if not potcar.is_file():
             continue
         zval = parse_potcar_zval(potcar)
+        if zval <= 0:
+            continue
         date = parse_potcar_date(potcar)
         key = (zval, date)
         if key > best_key:
