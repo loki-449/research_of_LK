@@ -15,6 +15,7 @@ scf_common.py — ELF scf 计算公共模块
 from __future__ import annotations
 
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import Any, Dict, Sequence, Tuple
 
 from vasp_common import (
@@ -78,9 +79,22 @@ def deploy_scf_system(
     base_dir: str | Path,
     pbe_lib: str | Path = DEFAULT_PBE_LIB,
 ) -> Tuple[RelaxStructure, Dict[str, Dict[str, Any]]]:
-    """Full deploy for scf: run script + POSCAR + POTCAR in scf_ELF."""
+    """完整部署 scf；先暂存 POSCAR/POTCAR，避免赝势失败造成新旧混用。"""
     structure = parse_relax_in(relax_in)
-    setup_scf_scripts(base_dir)
-    deploy_poscar_to_scf(structure, base_dir)
-    sources = deploy_potcar_to_scf(structure.elements, base_dir, pbe_lib=pbe_lib)
+    scf_dir = Path(base_dir) / SCF_SUBDIR
+    scf_dir.mkdir(parents=True, exist_ok=True)
+
+    with TemporaryDirectory(prefix=".deploy-", dir=scf_dir) as tmp:
+        staging_dir = Path(tmp)
+        write_poscar(structure, staging_dir / "POSCAR")
+        sources = assemble_potcar(
+            structure.elements,
+            staging_dir / "POTCAR",
+            pbe_lib=pbe_lib,
+        )
+
+        setup_scf_scripts(base_dir)
+        for filename in ("POSCAR", "POTCAR"):
+            (staging_dir / filename).replace(scf_dir / filename)
+
     return structure, sources
