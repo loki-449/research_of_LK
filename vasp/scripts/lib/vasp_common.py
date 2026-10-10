@@ -32,6 +32,7 @@ import re
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 # ============================================================
@@ -585,11 +586,24 @@ def deploy_opt_system(
     base_dir: str | Path,
     pbe_lib: str | Path = DEFAULT_PBE_LIB,
 ) -> Tuple[RelaxStructure, Dict[str, Dict[str, Any]]]:
-    """Full deploy for opt: run script + POSCAR + POTCAR in opt."""
+    """完整部署 opt；先暂存 POSCAR/POTCAR，避免赝势失败造成新旧混用。"""
     structure = parse_relax_in(relax_in)
-    setup_opt_scripts(base_dir)
-    deploy_poscar_to_opt(structure, base_dir)
-    sources = deploy_potcar_to_opt(structure.elements, base_dir, pbe_lib=pbe_lib)
+    opt_dir = opt_work_dir(base_dir)
+    opt_dir.mkdir(parents=True, exist_ok=True)
+
+    with TemporaryDirectory(prefix=".deploy-", dir=opt_dir) as tmp:
+        staging_dir = Path(tmp)
+        write_poscar(structure, staging_dir / "POSCAR")
+        sources = assemble_potcar(
+            structure.elements,
+            staging_dir / "POTCAR",
+            pbe_lib=pbe_lib,
+        )
+
+        setup_opt_scripts(base_dir)
+        for filename in ("POSCAR", "POTCAR"):
+            (staging_dir / filename).replace(opt_dir / filename)
+
     return structure, sources
 
 
