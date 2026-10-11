@@ -328,11 +328,12 @@ def resolve_dat_for_plot(
     system_a: str | None,
     datafile: str | Path | None,
 ) -> Path:
-    """优先汇总目录，其次 <A>/msd_data.dat，再否则 datafile。"""
-    if datafile:
+    """显式路径必须有效；未指定时依次查找汇总目录和体系本地文件。"""
+    if datafile is not None:
         p = Path(datafile)
         if p.is_file():
             return p
+        raise FileNotFoundError(f"Data file not found: {p}")
     if work_root and system_a:
         pub = published_dat_path(work_root, system_a)
         if pub.is_file():
