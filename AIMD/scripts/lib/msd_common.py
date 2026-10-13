@@ -14,6 +14,7 @@ dt 备注:
 """
 from __future__ import annotations
 
+import os
 import re
 import shutil
 from pathlib import Path
@@ -187,8 +188,8 @@ def match_columns(columns: List[str], pattern: str) -> List[str]:
 # ---------------------------------------------------------------------------
 
 def system_dir_from_xdatcar(xdatcar: str | Path) -> Path:
-    """.../<A>/AIMD/XDATCAR → <A>。"""
-    p = Path(xdatcar).resolve()
+    """.../<A>/AIMD/XDATCAR → <A>，保留符号链接所在的逻辑体系。"""
+    p = Path(os.path.abspath(os.fspath(Path(xdatcar).expanduser())))
     if p.parent.name == AIMD_SUBDIR:
         return p.parent.parent
     return p.parent
