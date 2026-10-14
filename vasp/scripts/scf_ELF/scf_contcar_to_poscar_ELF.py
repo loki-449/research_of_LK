@@ -156,8 +156,6 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.contcar and args.output:
         poscar = Path(args.output)
-        if poscar.name != "POSCAR":
-            poscar = poscar.parent / "POSCAR"
         ok = copy_contcar_to_poscar(
             Path(args.contcar), poscar,
             write_pbs=args.write_pbs,
