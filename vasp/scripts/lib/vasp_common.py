@@ -27,6 +27,7 @@ scf_ELF 相关功能已拆分至 scripts/lib/scf_common.py。
 """
 from __future__ import annotations
 
+import math
 import os
 import re
 from dataclasses import dataclass
@@ -163,6 +164,11 @@ def _split_section(text: str, start_key: str, end_keys: str | Sequence[str]) -> 
     return block[:cut]
 
 
+def _parse_qe_float(value: str) -> float:
+    """Parse a QE/Fortran floating-point value, including D exponents."""
+    return float(value.replace("D", "E").replace("d", "e"))
+
+
 @dataclass
 class RelaxStructure:
     """Structure extracted from QE relax.in."""
@@ -192,7 +198,12 @@ def parse_relax_in(relax_in: str | Path) -> RelaxStructure:
     for line in pos_lines:
         parts = line.split()
         if len(parts) >= 4:
-            positions.append((parts[0], float(parts[1]), float(parts[2]), float(parts[3])))
+            coordinates = tuple(_parse_qe_float(value) for value in parts[1:4])
+            if not all(math.isfinite(value) for value in coordinates):
+                raise ValueError(
+                    f"Non-finite atomic position in {relax_in}: {line}"
+                )
+            positions.append((parts[0], *coordinates))
 
     if not positions:
         raise ValueError(f"No atomic positions found in {relax_in}")
@@ -211,6 +222,11 @@ def parse_relax_in(relax_in: str | Path) -> RelaxStructure:
             continue
         parts = line.split()
         if len(parts) >= 3:
+            vector = tuple(_parse_qe_float(value) for value in parts[:3])
+            if not all(math.isfinite(value) for value in vector):
+                raise ValueError(
+                    f"Non-finite cell vector in {relax_in}: {line}"
+                )
             cell_lines.append(line)
     cell_lines = cell_lines[:3]
     if len(cell_lines) != 3:
