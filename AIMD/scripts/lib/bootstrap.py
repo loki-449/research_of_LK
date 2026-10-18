@@ -13,6 +13,12 @@ def init_imports() -> Path:
 
     load_deploy_env()
     root = scripts_root()
+    if root != SCRIPTS_ROOT:
+        raise RuntimeError(
+            "AIMD_SCRIPTS_ROOT 与当前入口脚本不属于同一安装目录："
+            f"配置为 {root}，当前为 {SCRIPTS_ROOT}。"
+            "请更新环境变量或改用配置目录中的入口脚本，避免混用不同版本。"
+        )
     for sub in ("lib", "MSD_RMSD"):
         path = str(root / sub)
         if path not in sys.path:
