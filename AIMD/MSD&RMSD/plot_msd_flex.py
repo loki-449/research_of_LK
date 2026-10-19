@@ -28,6 +28,11 @@ plot_msd_flex.py — MSD/RMSD 专用绘图（元素自动识别）
 """
 from __future__ import annotations
 
+if __name__ == "__main__":
+    from _forward import forward
+
+    forward("plot_msd_flex.py")
+
 import argparse
 import os
 import sys
