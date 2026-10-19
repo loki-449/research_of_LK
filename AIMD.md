@@ -38,25 +38,25 @@ pip install numpy matplotlib
 
 ## 快速开始（MSD/RMSD）
 
-进入脚本目录后运行（推荐）：
+使用迁移后的规范入口（推荐；先按 `AIMD/deploy.env.example` 配置环境）：
 
 ```bash
-cd AIMD/MSD&RMSD
-
-# 推荐：灵活版两步流程（元素自动识别）
-python extract_msd_flex.py path/to/XDATCAR --dt 1.0 -o msd_data.dat
-python plot_msd_flex.py msd_data.dat
+# 推荐：从各体系 INCAR 自动读取 POTIM
+$AIMD_PYTHON $AIMD_SCRIPTS_ROOT/MSD_RMSD/extract_msd_flex.py \
+  $AIMD_WORK_ROOT/<A>/AIMD/XDATCAR
 
 # 或一步完成计算与出图
-python xdatcar_msd_flex.py path/to/XDATCAR --dt 1.0
+$AIMD_PYTHON $AIMD_SCRIPTS_ROOT/MSD_RMSD/xdatcar_msd_flex.py \
+  $AIMD_WORK_ROOT/<A>/AIMD/XDATCAR
 ```
 
+旧目录 `AIMD/MSD&RMSD/` 的 `*_flex.py` 仅作兼容转发，不再运行独立算法副本。
 更完整的参数说明、脚本对比与配置方法，见 [MSD&RMSD.md](MSD&RMSD.md)。
 
 ## 脚本版本选择
 
 | 场景 | 推荐脚本 |
 |------|----------|
-| 换不同 XDATCAR / 元素组成会变 | `*_flex.py` 系列 |
-| 固定体系、沿用旧配置 | 原版 `extract_msd.py` / `plot_msd.py` / `xdatcar_msd.py` |
-| 需要自定义多子图线性图 | `plot_line_template.py` |
+| 换不同 XDATCAR / 元素组成会变 | `AIMD/scripts/MSD_RMSD/*_flex.py` 系列 |
+| 固定体系、沿用旧配置 | 迁移到 `AIMD/scripts/MSD_RMSD/`；旧原版仅 Deprecated |
+| 需要自定义多子图线性图 | `AIMD/scripts/MSD_RMSD/plot_line_template.py` |

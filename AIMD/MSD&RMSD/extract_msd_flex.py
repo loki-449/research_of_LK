@@ -32,6 +32,11 @@ extract_msd_flex.py — 从 XDATCAR 提取 MSD/RMSD 数据（元素自动识别�
 """
 from __future__ import annotations
 
+if __name__ == "__main__":
+    from _forward import forward
+
+    forward("extract_msd_flex.py")
+
 import argparse
 import os
 import sys

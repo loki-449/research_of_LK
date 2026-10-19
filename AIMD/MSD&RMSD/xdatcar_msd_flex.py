@@ -28,6 +28,11 @@ xdatcar_msd_flex.py — XDATCAR 一体化 MSD/RMSD 计算与绘图
 """
 from __future__ import annotations
 
+if __name__ == "__main__":
+    from _forward import forward
+
+    forward("xdatcar_msd_flex.py")
+
 import argparse
 import os
 import sys
