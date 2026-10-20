@@ -259,8 +259,9 @@ def read_poscar_elements(poscar: str | Path) -> List[str]:
 def read_potcar_elements(potcar: str | Path) -> List[str]:
     """Read concatenated element order from POTCAR metadata."""
     text = Path(potcar).read_text(encoding="utf-8", errors="replace")
+    lines = text.splitlines()
     elements: List[str] = []
-    for line in text.splitlines():
+    for line in lines:
         match = re.match(
             r"\s*TITEL\s*=\s*\S+\s+([A-Z][a-z]?)",
             line,
@@ -269,13 +270,16 @@ def read_potcar_elements(potcar: str | Path) -> List[str]:
             elements.append(match.group(1))
 
     if not elements:
-        for line in text.splitlines():
+        for line in lines:
             match = re.match(r"\s*VRHFIN\s*=\s*([A-Z][a-z]?)\s*:", line)
             if match:
                 elements.append(match.group(1))
 
     if not elements:
         raise ValueError(f"Cannot determine element order from POTCAR: {potcar}")
+    dataset_ends = sum(line.strip() == "End of Dataset" for line in lines)
+    if dataset_ends != len(elements):
+        raise ValueError(f"Incomplete POTCAR datasets: {potcar}")
     return elements
 
 

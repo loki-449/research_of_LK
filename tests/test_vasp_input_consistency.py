@@ -55,6 +55,7 @@ class VaspInputsCompleteTests(unittest.TestCase):
         sections = [
             f"PAW_PBE {element} 01Jan2000\n"
             f"   TITEL  = PAW_PBE {element}_pv 01Jan2000\n"
+            "End of Dataset\n"
             for element in elements
         ]
         self.work_dir.joinpath("POTCAR").write_text(
@@ -81,6 +82,20 @@ class VaspInputsCompleteTests(unittest.TestCase):
             encoding="utf-8",
         )
 
+        self.assertFalse(vasp_inputs_complete(self.work_dir))
+
+    def test_potcar_truncated_after_title_is_not_complete(self) -> None:
+        self.write_poscar("Ag Li")
+        self.work_dir.joinpath("POTCAR").write_text(
+            "   TITEL  = PAW_PBE Ag_pv 01Jan2000\n"
+            "End of Dataset\n"
+            "   TITEL  = PAW_PBE Li_sv 01Jan2000\n",
+            encoding="utf-8",
+        )
+
+        self.assertFalse(vasp_inputs_complete(self.work_dir))
+
+    def test_missing_input_is_not_complete(self) -> None:
         self.assertFalse(vasp_inputs_complete(self.work_dir))
 
 
