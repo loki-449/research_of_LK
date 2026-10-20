@@ -256,6 +256,45 @@ def read_poscar_elements(poscar: str | Path) -> List[str]:
     return lines[5].split()
 
 
+def read_potcar_elements(potcar: str | Path) -> List[str]:
+    """Read concatenated element order from POTCAR metadata."""
+    text = Path(potcar).read_text(encoding="utf-8", errors="replace")
+    elements: List[str] = []
+    for line in text.splitlines():
+        match = re.match(
+            r"\s*TITEL\s*=\s*\S+\s+([A-Z][a-z]?)",
+            line,
+        )
+        if match:
+            elements.append(match.group(1))
+
+    if not elements:
+        for line in text.splitlines():
+            match = re.match(r"\s*VRHFIN\s*=\s*([A-Z][a-z]?)\s*:", line)
+            if match:
+                elements.append(match.group(1))
+
+    if not elements:
+        raise ValueError(f"Cannot determine element order from POTCAR: {potcar}")
+    return elements
+
+
+def vasp_inputs_complete(work_dir: str | Path) -> bool:
+    """Return whether POSCAR and POTCAR exist and use the same element order."""
+    directory = Path(work_dir)
+    poscar = directory / "POSCAR"
+    potcar = directory / "POTCAR"
+    if not poscar.is_file() or not potcar.is_file():
+        return False
+
+    try:
+        poscar_elements = read_poscar_elements(poscar)
+        potcar_elements = read_potcar_elements(potcar)
+    except (OSError, ValueError):
+        return False
+    return bool(poscar_elements) and poscar_elements == potcar_elements
+
+
 # ============================================================
 # POTCAR 管理与择优
 # ============================================================
