@@ -27,6 +27,7 @@ from vasp_common import (
     find_qe_system_dirs,
     find_relax_in,
     parse_qe_system,
+    vasp_inputs_complete,
 )
 
 
@@ -52,8 +53,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def inputs_complete(base_dir: Path) -> bool:
-    d = base_dir / SCF_SUBDIR
-    return (d / "POSCAR").is_file() and (d / "POTCAR").is_file()
+    return vasp_inputs_complete(base_dir / SCF_SUBDIR)
 
 
 def process_one(
