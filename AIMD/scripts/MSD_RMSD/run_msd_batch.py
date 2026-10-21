@@ -20,6 +20,7 @@ init_imports()
 from path_config import add_work_root_argument, work_root_from_args
 from msd_common import (
     ensure_result_dirs,
+    find_missing_aimd_xdatcars,
     iter_aimd_xdatcars,
     published_dat_path,
     system_dir_from_xdatcar,
@@ -60,8 +61,14 @@ def main(argv: list[str] | None = None) -> int:
     ensure_result_dirs(work_root)
 
     files = iter_aimd_xdatcars(work_root)
+    missing = find_missing_aimd_xdatcars(work_root)
+    for xdat in missing:
+        print(f"ERROR: missing or invalid XDATCAR: {xdat}")
     if not files:
         print(f"No */AIMD/XDATCAR under {work_root}")
+        if missing:
+            print("---------------------------")
+            print(f"Finished: 0/{len(missing)} systems")
         return 1
 
     ok = 0
@@ -100,6 +107,9 @@ def main(argv: list[str] | None = None) -> int:
                 )
 
     print("---------------------------")
+    if missing:
+        print(f"Finished: {ok}/{len(files) + len(missing)} systems")
+        return 1
     print(f"Finished: {ok}/{len(files)} systems")
     return 0 if ok else 1
 

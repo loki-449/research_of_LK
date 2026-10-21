@@ -30,6 +30,7 @@ from msd_common import (
     aimd_dir_of,
     compute_msd_by_element,
     ensure_result_dirs,
+    find_missing_aimd_xdatcars,
     iter_aimd_xdatcars,
     local_dat_path,
     publish_dat,
@@ -157,8 +158,14 @@ def main(argv: list[str] | None = None) -> int:
         work_root = work_root_from_args(args)
         print(f"Work root: {work_root}")
         files = iter_aimd_xdatcars(work_root)
+        missing = find_missing_aimd_xdatcars(work_root)
+        for xdat in missing:
+            print(f"ERROR: missing or invalid XDATCAR: {xdat}")
         if not files:
             print(f"No */AIMD/XDATCAR under {work_root}")
+            if missing:
+                print("---------------------------")
+                print(f"Finished: 0/{len(missing)}")
             return 1
         ok = 0
         for xdat in files:
@@ -177,6 +184,9 @@ def main(argv: list[str] | None = None) -> int:
             ):
                 ok += 1
         print("---------------------------")
+        if missing:
+            print(f"Finished: {ok}/{len(files) + len(missing)}")
+            return 1
         print(f"Finished: {ok}/{len(files)}")
         return 0 if ok else 1
 

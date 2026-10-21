@@ -260,6 +260,24 @@ def iter_aimd_xdatcars(work_root: str | Path) -> List[Path]:
     return found
 
 
+def find_missing_aimd_xdatcars(work_root: str | Path) -> List[Path]:
+    """列出已有 AIMD 目录但缺少有效 XDATCAR 的体系输入。"""
+    root = Path(work_root)
+    missing: List[Path] = []
+    if not root.is_dir():
+        return missing
+    for child in sorted(root.iterdir()):
+        if not child.is_dir() or child.name in SKIP_DIR_NAMES:
+            continue
+        aimd_dir = child / AIMD_SUBDIR
+        if not aimd_dir.is_dir():
+            continue
+        xdat = aimd_dir / "XDATCAR"
+        if not xdat.is_file():
+            missing.append(xdat)
+    return missing
+
+
 def ensure_result_dirs(work_root: str | Path) -> Tuple[Path, Path]:
     root = Path(work_root)
     dat_dir = root / RESULT_DAT_DIR
