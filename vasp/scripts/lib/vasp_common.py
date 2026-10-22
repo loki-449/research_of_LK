@@ -104,11 +104,21 @@ def parse_system_name(basename: str) -> Optional[Tuple[str, str, str]]:
 
 
 def find_qe_system_dirs(qe_dir: str | Path, pattern: str = "*GPa*") -> List[Path]:
-    """Find first-level QE system directories matching pattern."""
+    """查找匹配的 QE 体系目录，且结果不得逃出输入根目录。"""
     root = Path(qe_dir)
     if not root.is_dir():
         raise FileNotFoundError(f"QE directory not found: {root}")
-    return sorted(p for p in root.glob(pattern) if p.is_dir())
+    resolved_root = root.resolve()
+    matches: List[Path] = []
+    for path in root.glob(pattern):
+        if not path.is_dir():
+            continue
+        try:
+            path.resolve().relative_to(resolved_root)
+        except ValueError:
+            continue
+        matches.append(path)
+    return sorted(matches)
 
 
 def parse_qe_system(path: str | Path) -> Optional[SystemInfo]:
