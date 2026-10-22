@@ -170,11 +170,17 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     output = Path(args.output)
-    # If output path is in opt, use make_for_base
-    if output.parent.name == OPT_SUBDIR:
+    # 仅标准 opt/POTCAR 使用体系目录入口；自定义文件名必须原样保留。
+    if output.parent.name == OPT_SUBDIR and output.name == "POTCAR":
         make_for_base(elements, output.parent.parent, args.pbe_lib, args.keep_single)
     else:
-        make_one(elements, output, args.pbe_lib, keep_single=args.keep_single)
+        make_one(
+            elements,
+            output,
+            args.pbe_lib,
+            keep_single=args.keep_single,
+            write_pbs=output.parent.name != OPT_SUBDIR,
+        )
     return 0
 
 
