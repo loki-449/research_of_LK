@@ -260,6 +260,20 @@ def read_poscar_elements(poscar: str | Path) -> List[str]:
 # POTCAR 管理与择优
 # ============================================================
 
+def _validate_element_name(element: str) -> str:
+    """校验元素标识是单个名称，不能被解释为文件系统路径。"""
+    if (
+        not element
+        or element in {".", ".."}
+        or "\x00" in element
+        or Path(element).name != element
+    ):
+        raise ValueError(
+            f"Invalid element name (path components are forbidden): {element!r}"
+        )
+    return element
+
+
 def parse_potcar_zval(potcar: str | Path) -> float:
     """Extract ZVAL (valence electron count) from a single-element POTCAR."""
     text = Path(potcar).read_text(encoding="utf-8", errors="replace")
@@ -314,6 +328,7 @@ def find_potcar_candidates(element: str, pbe_lib: str | Path) -> List[Path]:
       <lib>/Ba_sv/        semicore (_sv) or hard (_pv) variants
       <lib>/Li_pv/
     """
+    element = _validate_element_name(element)
     lib = Path(pbe_lib)
     if not lib.is_dir():
         raise FileNotFoundError(f"PBE library not found: {lib}")
@@ -403,6 +418,7 @@ def copy_single_potcars(
 
     sources: Dict[str, Dict[str, Any]] = {}
     for elem in elements:
+        _validate_element_name(elem)
         choice = choose_potcar(elem, pbe_lib)
         dst = out_dir / f"{elem}.POTCAR"
         dst.write_bytes(choice.potcar_path.read_bytes())
@@ -423,6 +439,8 @@ def cat_potcar_in_order(
     """Concatenate <Elem>.POTCAR files in element order into final POTCAR."""
     out_dir = Path(target_dir)
     final = out_dir / output_name
+    for elem in elements:
+        _validate_element_name(elem)
 
     with final.open("wb") as out_f:
         for elem in elements:
@@ -455,6 +473,8 @@ def assemble_potcar(
     """
     out = Path(output)
     target_dir = out.parent
+    for elem in elements:
+        _validate_element_name(elem)
     sources = copy_single_potcars(elements, target_dir, pbe_lib=pbe_lib)
     cat_potcar_in_order(
         elements,
