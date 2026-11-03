@@ -22,8 +22,8 @@ from bootstrap import init_imports
 init_imports()
 
 from path_config import add_work_root_argument, work_root_from_args
-from scf_common import SCF_SUBDIR, setup_scf_scripts
-from vasp_common import OPT_SUBDIR, iter_opt_input_files
+from scf_common import SCF_PBS_SCRIPT, SCF_SUBDIR, setup_scf_scripts
+from vasp_common import OPT_SUBDIR, iter_opt_input_files, path_is_within_root
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -133,10 +133,21 @@ def batch_scan(
 
         base_dir = work_root / rel.parent.parent
         poscar = base_dir / SCF_SUBDIR / "POSCAR"
+        targets = [poscar]
+        if write_pbs:
+            targets.append(poscar.parent / SCF_PBS_SCRIPT)
 
         print("---------------------------")
         print(f"System: {base_dir.relative_to(work_root)}")
         print(f"  CONTCAR: {contcar}")
+
+        escaped = next(
+            (path for path in targets if not path_is_within_root(path, work_root)),
+            None,
+        )
+        if escaped is not None:
+            print(f"  ERROR: refusing output outside work root: {escaped}")
+            continue
 
         if copy_contcar_to_poscar(contcar, poscar, write_pbs=write_pbs, dry_run=dry_run):
             ok += 1

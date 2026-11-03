@@ -526,16 +526,33 @@ def opt_work_dir(base_dir: str | Path) -> Path:
     return Path(base_dir) / OPT_SUBDIR
 
 
+def path_is_within_root(path: str | Path, root: str | Path) -> bool:
+    """检查解析后的路径是否仍位于指定工作根内。"""
+    try:
+        Path(path).resolve().relative_to(Path(root).resolve())
+    except (OSError, RuntimeError, ValueError):
+        return False
+    return True
+
+
 def iter_opt_work_dirs(work_root: str | Path) -> List[Path]:
     """List opt work dirs at work_root/<material>/<pressure>/opt/."""
     root = Path(work_root)
-    return sorted(d for d in root.glob(f"*/*/{OPT_SUBDIR}") if d.is_dir())
+    return sorted(
+        d
+        for d in root.glob(f"*/*/{OPT_SUBDIR}")
+        if d.is_dir() and path_is_within_root(d, root)
+    )
 
 
 def iter_opt_input_files(work_root: str | Path, filename: str) -> List[Path]:
     """List files at work_root/<material>/<pressure>/opt/<filename>."""
     root = Path(work_root)
-    return sorted(p for p in root.glob(f"*/*/{OPT_SUBDIR}/{filename}") if p.is_file())
+    return sorted(
+        p
+        for p in root.glob(f"*/*/{OPT_SUBDIR}/{filename}")
+        if p.is_file() and path_is_within_root(p, root)
+    )
 
 
 def write_run_script(

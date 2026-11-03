@@ -25,9 +25,21 @@ init_imports()
 
 from path_config import add_work_root_argument, env_int, resolve_work_root
 from path_config import ENV_SUBMIT_MAX_JOBS, ENV_SUBMIT_WAIT_INTERVAL
-from vasp_common import OPT_PBS_SCRIPT, OPT_SUBDIR, iter_opt_work_dirs
+from vasp_common import (
+    OPT_PBS_SCRIPT,
+    OPT_SUBDIR,
+    iter_opt_work_dirs,
+    path_is_within_root,
+)
 
 MARKER_NAME = ".pbs_submitted"
+
+
+def submission_paths_within_root(opt_dir: Path, work_root: Path) -> bool:
+    """检查提交脚本与标记路径是否仍位于工作根内。"""
+    return path_is_within_root(opt_dir / OPT_PBS_SCRIPT, work_root) and (
+        path_is_within_root(opt_dir / MARKER_NAME, work_root)
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -86,6 +98,7 @@ def find_opt_dirs(work_root: Path) -> List[Path]:
         opt_dir
         for opt_dir in iter_opt_work_dirs(root)
         if (opt_dir / OPT_PBS_SCRIPT).is_file()
+        and submission_paths_within_root(opt_dir, root)
     ]
 
 
@@ -229,6 +242,10 @@ def submit_all(
             rel = opt_dir
         print(f"Processing: {rel}")
 
+        if not submission_paths_within_root(opt_dir, work_root):
+            print(f"  ERROR: submission path escaped work root: {opt_dir}")
+            continue
+
         if read_marker(opt_dir) and not resubmit:
             print(f"  SKIP: already submitted ({marker_path(opt_dir)})")
             skipped += 1
@@ -244,10 +261,18 @@ def submit_all(
             stopped += 1
             break
 
+        if not submission_paths_within_root(opt_dir, work_root):
+            print(f"  ERROR: submission path escaped work root: {opt_dir}")
+            continue
+
         try:
             chmod_executable(opt_dir / OPT_PBS_SCRIPT, dry_run=dry_run)
             job_id = qsub_job(opt_dir, dry_run=dry_run)
             if not dry_run:
+                if not submission_paths_within_root(opt_dir, work_root):
+                    raise RuntimeError(
+                        f"submission marker escaped work root: {marker_path(opt_dir)}"
+                    )
                 write_marker(opt_dir, job_id)
             print(f"  SUBMITTED: job {job_id}  (user jobs before submit: {n_jobs})")
             submitted += 1
