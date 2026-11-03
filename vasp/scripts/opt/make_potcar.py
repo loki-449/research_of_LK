@@ -36,6 +36,7 @@ from vasp_common import (
     OPT_SUBDIR,
     iter_opt_input_files,
     assemble_potcar,
+    path_is_within_root,
     read_poscar_elements,
     setup_opt_scripts,
 )
@@ -144,6 +145,15 @@ def batch_scan(work_root: Path, pbe_lib: str, keep_single: bool) -> int:
         print(f"Processing: {base_dir}")
         try:
             elements = read_poscar_elements(opt_poscar)
+            output = opt_potcar_path(base_dir)
+            targets = [output]
+            targets.extend(output.parent / f"{elem}.POTCAR" for elem in elements)
+            escaped = next(
+                (path for path in targets if not path_is_within_root(path, work_root)),
+                None,
+            )
+            if escaped is not None:
+                raise ValueError(f"Refusing output outside work root: {escaped}")
             make_for_base(elements, base_dir, pbe_lib, keep_single=keep_single)
             ok += 1
         except (ValueError, FileNotFoundError, OSError) as exc:
