@@ -207,12 +207,32 @@ def parse_relax_in(relax_in: str | Path) -> RelaxStructure:
     cell_lines: List[str] = []
     for line in cell_block.strip().splitlines():
         line = line.strip()
-        if not line or line.startswith("{"):
+        if not line:
             continue
+
         parts = line.split()
-        if len(parts) >= 3:
-            cell_lines.append(line)
-    cell_lines = cell_lines[:3]
+        if not cell_lines:
+            unit = line.lower().strip("{}()").strip()
+            if unit in COORD_KEYWORDS or re.match(r"^alat\s*=", unit):
+                continue
+
+        if len(parts) != 3:
+            raise ValueError(
+                f"Invalid cell vector in {relax_in}: expected 3 numeric values, "
+                f"got {line!r}"
+            )
+        try:
+            for value in parts:
+                float(value.replace("D", "E").replace("d", "e"))
+        except ValueError as exc:
+            raise ValueError(
+                f"Invalid cell vector in {relax_in}: expected 3 numeric values, "
+                f"got {line!r}"
+            ) from exc
+        cell_lines.append(line)
+        if len(cell_lines) == 3:
+            break
+
     if len(cell_lines) != 3:
         raise ValueError(f"Expected 3 cell vectors in {relax_in}, got {len(cell_lines)}")
 
