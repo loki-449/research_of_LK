@@ -163,6 +163,11 @@ def _split_section(text: str, start_key: str, end_keys: str | Sequence[str]) -> 
     return block[:cut]
 
 
+def _parse_qe_float(value: str) -> float:
+    """解析 QE 数值，包括 Fortran 常用的 D/d 指数格式。"""
+    return float(value.replace("D", "E").replace("d", "e"))
+
+
 @dataclass
 class RelaxStructure:
     """Structure extracted from QE relax.in."""
@@ -192,7 +197,14 @@ def parse_relax_in(relax_in: str | Path) -> RelaxStructure:
     for line in pos_lines:
         parts = line.split()
         if len(parts) >= 4:
-            positions.append((parts[0], float(parts[1]), float(parts[2]), float(parts[3])))
+            positions.append(
+                (
+                    parts[0],
+                    _parse_qe_float(parts[1]),
+                    _parse_qe_float(parts[2]),
+                    _parse_qe_float(parts[3]),
+                )
+            )
 
     if not positions:
         raise ValueError(f"No atomic positions found in {relax_in}")
