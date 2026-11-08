@@ -565,6 +565,12 @@ def setup_opt_scripts(base_dir: str | Path) -> Path:
 def deploy_poscar_to_opt(structure: RelaxStructure, base_dir: str | Path) -> Path:
     """Write POSCAR into opt only."""
     opt_dir = Path(base_dir) / OPT_SUBDIR
+    contcar = opt_dir / "CONTCAR"
+    if contcar.is_file():
+        raise FileExistsError(
+            f"Refusing to replace opt/POSCAR after VASP created {contcar}. "
+            "Archive or remove CONTCAR before intentionally restarting from QE."
+        )
     opt_dir.mkdir(parents=True, exist_ok=True)
     return write_poscar(structure, opt_dir / "POSCAR")
 
