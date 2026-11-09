@@ -37,7 +37,6 @@ from vasp_common import (
     iter_opt_input_files,
     assemble_potcar,
     read_poscar_elements,
-    setup_opt_scripts,
 )
 
 
@@ -96,7 +95,6 @@ def make_one(
     output: Path,
     pbe_lib: str,
     keep_single: bool = False,
-    write_pbs: bool = True,
 ) -> None:
     sources = assemble_potcar(
         elements,
@@ -104,9 +102,6 @@ def make_one(
         pbe_lib=pbe_lib,
         keep_single_files=keep_single,
     )
-    if write_pbs:
-        base = output.parent.parent if output.parent.name == OPT_SUBDIR else output.parent
-        setup_opt_scripts(base)
 
     print(f"POTCAR written: {output}")
     print(f"  rule: max ZVAL, then newest date on line 1")
