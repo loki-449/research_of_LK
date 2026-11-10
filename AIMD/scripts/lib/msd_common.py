@@ -14,10 +14,11 @@ dt 备注:
 """
 from __future__ import annotations
 
+import os
 import re
 import shutil
 from pathlib import Path
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import BinaryIO, Callable, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 
@@ -180,6 +181,49 @@ def parse_elements_from_columns(columns: List[str], suffix: str = MSD_SUFFIX) ->
 def match_columns(columns: List[str], pattern: str) -> List[str]:
     regex = "^" + re.escape(pattern).replace(r"\*", ".*") + "$"
     return [col for col in columns if re.fullmatch(regex, col)]
+
+
+def save_png_safely(
+    output: str | Path,
+    writer: Callable[[BinaryIO], None],
+    protected_paths: Sequence[str | Path] = (),
+) -> Path:
+    """在截断输出前拒绝覆盖受保护的输入文件或其链接别名。"""
+    requested = Path(output)
+    if not requested.suffix:
+        actual = Path(f"{requested}.png")
+    elif requested.suffix.lower() == ".png":
+        actual = requested
+    else:
+        raise ValueError(f"PNG output path must end with .png: {requested}")
+
+    protected_fds: List[int] = []
+    output_fd: Optional[int] = None
+    try:
+        for protected in protected_paths:
+            protected_fds.append(os.open(protected, os.O_RDONLY))
+
+        output_fd = os.open(actual, os.O_WRONLY | os.O_CREAT, 0o666)
+        output_stat = os.fstat(output_fd)
+        for protected_fd in protected_fds:
+            protected_stat = os.fstat(protected_fd)
+            if (
+                output_stat.st_dev == protected_stat.st_dev
+                and output_stat.st_ino == protected_stat.st_ino
+            ):
+                raise ValueError(f"PNG output aliases protected input: {actual}")
+
+        os.ftruncate(output_fd, 0)
+        with os.fdopen(output_fd, "wb") as stream:
+            output_fd = None
+            writer(stream)
+    finally:
+        if output_fd is not None:
+            os.close(output_fd)
+        for protected_fd in protected_fds:
+            os.close(protected_fd)
+
+    return actual
 
 
 # ---------------------------------------------------------------------------
