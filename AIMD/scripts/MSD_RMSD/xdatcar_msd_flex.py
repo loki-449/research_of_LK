@@ -27,6 +27,7 @@ from msd_common import (
     read_xdatcar,
     resolve_dt,
     results_to_table,
+    save_png_safely,
     system_dir_from_xdatcar,
     unique_elements,
     write_dat,
@@ -62,7 +63,7 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def plot_msd(results, save_path: str) -> None:
+def plot_msd(results, save_path: str, protected_paths=()) -> Path:
     import matplotlib
 
     matplotlib.use("Agg")
@@ -85,9 +86,16 @@ def plot_msd(results, save_path: str) -> None:
     ax2.set_title("RMSD")
     plt.tight_layout()
     Path(save_path).parent.mkdir(parents=True, exist_ok=True)
-    plt.savefig(save_path, dpi=200)
-    print(f"Plot saved: {save_path}")
-    plt.close()
+    try:
+        actual_path = save_png_safely(
+            save_path,
+            lambda stream: plt.savefig(stream, format="png", dpi=200),
+            protected_paths=protected_paths,
+        )
+    finally:
+        plt.close()
+    print(f"Plot saved: {actual_path}")
+    return actual_path
 
 
 def print_summary(results, n_frames: int) -> None:
@@ -161,7 +169,11 @@ def main(argv: list[str] | None = None) -> int:
             if args.output
             else system_dir / f"{system_a}_tmp_msd_rmsd.png"
         )
-        plot_msd(results, str(tmp))
+        try:
+            tmp = plot_msd(results, str(tmp), protected_paths=(xdat,))
+        except (OSError, ValueError) as exc:
+            print(f"ERROR: {exc}")
+            return 1
         if not args.no_publish:
             ensure_result_dirs(work_root)
             publish_png(tmp, work_root, system_a, keep_local=args.keep_local)

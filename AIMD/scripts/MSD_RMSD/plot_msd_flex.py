@@ -115,14 +115,19 @@ def main(argv=None) -> int:
     if system_a and work_root and not args.output:
         tmp_png = (work_root / system_a) / f"{system_a}_tmp_msd_rmsd.png"
 
-    panels = build_msd_panels(datafile)
-    print(f"datafile: {datafile}")
-    print(
-        "elements:",
-        [col.replace(MSD_SUFFIX, "") for col in panels[0]["y_columns"]],
-    )
-
-    do_plot(datafile=str(datafile), output=str(tmp_png), panels=panels)
+    try:
+        panels = build_msd_panels(datafile)
+        print(f"datafile: {datafile}")
+        print(
+            "elements:",
+            [col.replace(MSD_SUFFIX, "") for col in panels[0]["y_columns"]],
+        )
+        tmp_png = Path(
+            do_plot(datafile=str(datafile), output=str(tmp_png), panels=panels)
+        )
+    except (OSError, ValueError) as exc:
+        print(f"ERROR: {exc}")
+        return 1
 
     if not args.no_publish and system_a and work_root:
         publish_png(tmp_png, work_root, system_a, keep_local=args.keep_local)

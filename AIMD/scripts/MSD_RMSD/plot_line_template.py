@@ -59,7 +59,7 @@ from bootstrap import init_imports
 
 init_imports()
 
-from msd_common import load_dat, match_columns
+from msd_common import load_dat, match_columns, save_png_safely
 
 # ============================================================
 # 1) Data source
@@ -281,10 +281,21 @@ def do_plot(
 
     if TIGHT_LAYOUT:
         plt.tight_layout()
-    plt.savefig(output, dpi=DPI, **SAVEFIG_KW)
-    plt.close()
-    print(f"Plot saved: {output}")
-    return output
+    try:
+        actual_output = save_png_safely(
+            output,
+            lambda stream: plt.savefig(
+                stream,
+                format="png",
+                dpi=DPI,
+                **SAVEFIG_KW,
+            ),
+            protected_paths=(datafile,),
+        )
+    finally:
+        plt.close()
+    print(f"Plot saved: {actual_output}")
+    return str(actual_output)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -308,7 +319,11 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: Optional[List[str]] = None) -> int:
     args = build_parser().parse_args(argv)
-    do_plot(datafile=args.datafile, output=args.output)
+    try:
+        do_plot(datafile=args.datafile, output=args.output)
+    except (OSError, ValueError) as exc:
+        print(f"ERROR: {exc}")
+        return 1
     return 0
 
 
