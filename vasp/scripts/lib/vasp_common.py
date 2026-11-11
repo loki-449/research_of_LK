@@ -414,6 +414,35 @@ def copy_single_potcars(
     return sources
 
 
+def _paths_alias(left: Path, right: Path) -> bool:
+    """Return whether two paths name the same file, including dangling symlinks."""
+    try:
+        if left.resolve(strict=False) == right.resolve(strict=False):
+            return True
+    except (OSError, RuntimeError):
+        pass
+
+    try:
+        return os.path.samefile(left, right)
+    except OSError:
+        return False
+
+
+def _reject_single_potcar_output_alias(
+    elements: Sequence[str],
+    target_dir: Path,
+    final: Path,
+) -> None:
+    """Reject a final output that aliases an intermediate <Elem>.POTCAR."""
+    for elem in elements:
+        single = target_dir / f"{elem}.POTCAR"
+        if _paths_alias(final, single):
+            raise ValueError(
+                f"Output POTCAR conflicts with intermediate file: {final} "
+                f"(element {elem!r})"
+            )
+
+
 def cat_potcar_in_order(
     elements: Sequence[str],
     target_dir: str | Path,
@@ -423,6 +452,7 @@ def cat_potcar_in_order(
     """Concatenate <Elem>.POTCAR files in element order into final POTCAR."""
     out_dir = Path(target_dir)
     final = out_dir / output_name
+    _reject_single_potcar_output_alias(elements, out_dir, final)
 
     with final.open("wb") as out_f:
         for elem in elements:
@@ -455,6 +485,7 @@ def assemble_potcar(
     """
     out = Path(output)
     target_dir = out.parent
+    _reject_single_potcar_output_alias(elements, target_dir, out)
     sources = copy_single_potcars(elements, target_dir, pbe_lib=pbe_lib)
     cat_potcar_in_order(
         elements,
