@@ -109,13 +109,16 @@ def write_marker(opt_dir: Path, job_id: str) -> None:
     marker_path(opt_dir).write_text(content, encoding="utf-8")
 
 
-def clear_markers(work_root: Path) -> int:
+def clear_markers(work_root: Path, dry_run: bool = False) -> int:
     count = 0
     for opt_dir in find_opt_dirs(work_root):
         mp = marker_path(opt_dir)
         if mp.is_file():
-            mp.unlink()
-            print(f"  cleared: {mp}")
+            if dry_run:
+                print(f"  [dry-run] would clear: {mp}")
+            else:
+                mp.unlink()
+                print(f"  cleared: {mp}")
             count += 1
     return count
 
@@ -208,8 +211,9 @@ def submit_all(
     dry_run: bool,
 ) -> int:
     if resubmit or clear_only:
-        n_cleared = clear_markers(work_root)
-        print(f"Cleared {n_cleared} marker(s) under {work_root}")
+        n_cleared = clear_markers(work_root, dry_run=dry_run)
+        action = "Would clear" if dry_run else "Cleared"
+        print(f"{action} {n_cleared} marker(s) under {work_root}")
         if clear_only:
             return 0
 
