@@ -40,6 +40,15 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 DEFAULT_PBE_LIB = "/home/test1/hhy/basic/psudopotential/PAW-GGA-PBE"
 
 COORD_KEYWORDS = frozenset({"crystal", "alat", "bohr", "angstrom"})
+ELEMENT_SYMBOLS = frozenset(
+    """
+    H He Li Be B C N O F Ne Na Mg Al Si P S Cl Ar K Ca Sc Ti V Cr Mn Fe Co Ni
+    Cu Zn Ga Ge As Se Br Kr Rb Sr Y Zr Nb Mo Tc Ru Rh Pd Ag Cd In Sn Sb Te I
+    Xe Cs Ba La Ce Pr Nd Pm Sm Eu Gd Tb Dy Ho Er Tm Yb Lu Hf Ta W Re Os Ir Pt
+    Au Hg Tl Pb Bi Po At Rn Fr Ra Ac Th Pa U Np Pu Am Cm Bk Cf Es Fm Md No Lr
+    Rf Db Sg Bh Hs Mt Ds Rg Cn Nh Fl Mc Lv Ts Og
+    """.split()
+)
 
 # ============================================================
 # 子目录名称常量
@@ -171,6 +180,22 @@ class RelaxStructure:
     counts: List[int]
     cell_lines: List[str]
     positions: List[Tuple[str, float, float, float]]
+
+
+def qe_species_label_to_element(label: str) -> str:
+    """将 QE 的数字后缀物种标签转换为 VASP 化学元素符号。
+
+    QE 常用 ``Fe1``/``Fe2`` 区分同一元素的不同磁性子晶格；VASP 的
+    POSCAR/POTCAR 需要真实元素符号。无法无歧义识别的自定义标签原样保留，
+    以兼容按自定义目录组织的既有赝势库。
+    """
+    if label in ELEMENT_SYMBOLS:
+        return label
+
+    match = re.fullmatch(r"([A-Z][a-z]?)[0-9]+", label)
+    if match and match.group(1) in ELEMENT_SYMBOLS:
+        return match.group(1)
+    return label
 
 
 def parse_relax_in(relax_in: str | Path) -> RelaxStructure:
@@ -403,7 +428,8 @@ def copy_single_potcars(
 
     sources: Dict[str, Dict[str, Any]] = {}
     for elem in elements:
-        choice = choose_potcar(elem, pbe_lib)
+        potcar_element = qe_species_label_to_element(elem)
+        choice = choose_potcar(potcar_element, pbe_lib)
         dst = out_dir / f"{elem}.POTCAR"
         dst.write_bytes(choice.potcar_path.read_bytes())
         sources[elem] = {
