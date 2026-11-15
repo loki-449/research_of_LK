@@ -14,6 +14,9 @@ make_potcar.py — 按元素顺序拼接 VASP POTCAR（opt 用）
   python make_potcar.py --scan /path/to/calc
   python make_potcar.py --poscar /calc/Ag/50/opt/POSCAR -o /calc/Ag/50/opt/POTCAR
 
+安全约束:
+  写入标准 opt/POTCAR 时，如同目录已有 POSCAR，元素及顺序必须完全一致。
+
 默认赝势库:
   /home/test1/hhy/basic/psudopotential/PAW-GGA-PBE
 """
@@ -48,7 +51,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "elements",
         nargs="*",
-        help="Element symbols in order (optional if --poscar is given)",
+        help=(
+            "Element symbols in order (optional if --poscar is given); "
+            "must match sibling opt/POSCAR when present"
+        ),
     )
     parser.add_argument(
         "--poscar",
@@ -91,6 +97,21 @@ def opt_potcar_path(base_dir: Path) -> Path:
     return Path(base_dir) / OPT_SUBDIR / "POTCAR"
 
 
+def validate_elements_against_poscar(elements: List[str], output: Path) -> None:
+    """已有同目录 POSCAR 时，拒绝写入元素种类或顺序不一致的 POTCAR。"""
+    poscar = output.parent / "POSCAR"
+    if not poscar.is_file():
+        return
+
+    expected = read_poscar_elements(poscar)
+    if elements != expected:
+        raise ValueError(
+            "Element order does not match sibling POSCAR: "
+            f"requested={elements}, POSCAR={expected} ({poscar}); "
+            f"refusing to overwrite {output}"
+        )
+
+
 def make_one(
     elements: List[str],
     output: Path,
@@ -123,6 +144,7 @@ def make_for_base(
     """Write POTCAR to opt only."""
     output = opt_potcar_path(base_dir)
     output.parent.mkdir(parents=True, exist_ok=True)
+    validate_elements_against_poscar(elements, output)
     sources = assemble_potcar(
         elements, output, pbe_lib=pbe_lib, keep_single_files=keep_single
     )
@@ -169,12 +191,17 @@ def main(argv: list[str] | None = None) -> int:
         build_parser().print_help()
         return 1
 
-    output = Path(args.output)
-    # If output path is in opt, use make_for_base
-    if output.parent.name == OPT_SUBDIR:
-        make_for_base(elements, output.parent.parent, args.pbe_lib, args.keep_single)
-    else:
-        make_one(elements, output, args.pbe_lib, keep_single=args.keep_single)
+    requested_output = Path(args.output).expanduser()
+    output = requested_output.parent.resolve() / requested_output.name
+    try:
+        # If output path is in opt, use make_for_base
+        if output.parent.name == OPT_SUBDIR:
+            make_for_base(elements, output.parent.parent, args.pbe_lib, args.keep_single)
+        else:
+            make_one(elements, output, args.pbe_lib, keep_single=args.keep_single)
+    except (ValueError, FileNotFoundError, OSError) as exc:
+        print(f"ERROR: {exc}")
+        return 1
     return 0
 
 

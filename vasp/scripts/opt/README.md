@@ -92,6 +92,9 @@ python make_potcar.py --poscar $VASP_WORK_ROOT/Ag/50/opt/POSCAR \
     -o $VASP_WORK_ROOT/Ag/50/opt/POTCAR
 ```
 
+写入标准 `opt/POTCAR` 时，如同目录已有 `POSCAR`，脚本会核对元素种类及顺序；
+不一致时拒绝覆盖已有 POTCAR。
+
 ### submit_opt.py
 
 ```bash

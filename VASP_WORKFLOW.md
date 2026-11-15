@@ -209,6 +209,7 @@ QE 文件夹名：`Ag-H-50GPa-300K`
 | **生成路径** | `$WR/<A>/<B>/opt/POTCAR` |
 | **依赖库** | `vasp_common.assemble_potcar` |
 | **择优规则** | ZVAL 最大 → 日期最新 |
+| **一致性保护** | 写标准 `opt/POTCAR` 前，如同目录已有 POSCAR，元素种类及顺序必须完全一致，否则拒绝覆盖 |
 
 #### `run_opt_batch.py`
 
