@@ -109,45 +109,44 @@ def extract_one(
     no_publish: bool,
     dry_run: bool,
 ) -> bool:
-    system_dir = system_dir_from_xdatcar(xdatcar)
-    system_a = system_dir.name
-    aimd_dir = aimd_dir_of(system_dir)
-    wr = work_root or system_dir.parent
-
     try:
+        system_dir = system_dir_from_xdatcar(xdatcar)
+        system_a = system_dir.name
+        aimd_dir = aimd_dir_of(system_dir)
+        wr = work_root or system_dir.parent
+
         timestep, dt_src = resolve_dt(aimd_dir, cli_dt=dt)
-    except FileNotFoundError as exc:
-        print(f"  ERROR: {exc}")
-        return False
+        local_out = output or local_dat_path(system_dir)
 
-    local_out = output or local_dat_path(system_dir)
+        print(f"Processing: {system_a}")
+        print(f"  XDATCAR: {xdatcar}")
+        print(f"  dt: {timestep} fs ({dt_src})")
+        print(f"  local:   {local_out}")
 
-    print(f"Processing: {system_a}")
-    print(f"  XDATCAR: {xdatcar}")
-    print(f"  dt: {timestep} fs ({dt_src})")
-    print(f"  local:   {local_out}")
+        if dry_run:
+            print(f"  [dry-run] would write + publish under {wr}")
+            return True
 
-    if dry_run:
-        print(f"  [dry-run] would write + publish under {wr}")
+        positions, elem_map = read_xdatcar(xdatcar)
+        elems = elements or unique_elements(elem_map, order=element_order)
+        print(
+            f"  frames: {positions.shape[0]}, atoms: {positions.shape[1]}, "
+            f"elements: {elems}"
+        )
+
+        results = compute_msd_by_element(
+            positions, timestep, elem_map, elements=elems
+        )
+        data = results_to_table(results)
+        write_dat(data, local_out, stride=stride, element_order=elems)
+
+        if not no_publish:
+            ensure_result_dirs(wr)
+            publish_dat(local_out, wr, system_a, keep_local=keep_local)
         return True
-
-    positions, elem_map = read_xdatcar(xdatcar)
-    elems = elements or unique_elements(elem_map, order=element_order)
-    print(
-        f"  frames: {positions.shape[0]}, atoms: {positions.shape[1]}, "
-        f"elements: {elems}"
-    )
-
-    results = compute_msd_by_element(
-        positions, timestep, elem_map, elements=elems
-    )
-    data = results_to_table(results)
-    write_dat(data, local_out, stride=stride, element_order=elems)
-
-    if not no_publish:
-        ensure_result_dirs(wr)
-        publish_dat(local_out, wr, system_a, keep_local=keep_local)
-    return True
+    except (ValueError, IndexError, OSError) as exc:
+        print(f"  ERROR: {xdatcar}: {exc}")
+        return False
 
 
 def main(argv: list[str] | None = None) -> int:
