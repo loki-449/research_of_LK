@@ -30,13 +30,14 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Copy CONTCAR from opt → scf_ELF, rename to POSCAR for SCF+ELF."
     )
-    parser.add_argument(
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument(
         "--scan",
         action="store_true",
         help="Batch mode: scan work root for all CONTCAR → copy to sibling scf_ELF",
     )
     add_work_root_argument(parser)
-    parser.add_argument(
+    mode.add_argument(
         "--contcar",
         help="Direct path to a single CONTCAR (use with --output)",
     )
@@ -44,14 +45,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--output",
         help="Target POSCAR path (use with --contcar)",
     )
-    parser.add_argument(
+    mode.add_argument(
         "--system-dir",
-        help="Single system base dir, e.g. /calc/Ag/50",
-    )
-    parser.add_argument(
         "--opt-dir",
         dest="system_dir",
-        help="Deprecated alias for --system-dir",
+        help="Single system base dir, e.g. /calc/Ag/50 (--opt-dir is deprecated)",
     )
     parser.add_argument(
         "--write-pbs",
@@ -147,7 +145,11 @@ def batch_scan(
 
 
 def main(argv: list[str] | None = None) -> int:
-    args = build_parser().parse_args(argv)
+    parser = build_parser()
+    args = parser.parse_args(argv)
+
+    if bool(args.contcar) != bool(args.output):
+        parser.error("--contcar and --output must be used together")
 
     if args.scan:
         work_root = work_root_from_args(args)
@@ -173,7 +175,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 0 if ok else 1
 
-    build_parser().print_help()
+    parser.print_help()
     return 1
 
 
