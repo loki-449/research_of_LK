@@ -93,6 +93,9 @@ def compute_msd_by_element(
     if elements is None:
         elements = unique_elements(elem_map, order="file")
     else:
+        duplicates = sorted({elem for elem in elements if elements.count(elem) > 1})
+        if duplicates:
+            raise ValueError(f"Duplicate elements requested: {duplicates}")
         unknown = sorted(set(elements) - set(elem_map))
         if unknown:
             raise ValueError(f"Unknown elements in XDATCAR: {unknown}")
@@ -129,9 +132,14 @@ def write_dat(
     element_order: List[str] | None = None,
 ) -> Path:
     out = Path(outpath)
-    out.parent.mkdir(parents=True, exist_ok=True)
     if element_order is None:
         element_order = [k.replace("_MSD", "") for k in data if k.endswith("_MSD")]
+    duplicates = sorted(
+        {elem for elem in element_order if element_order.count(elem) > 1}
+    )
+    if duplicates:
+        raise ValueError(f"Duplicate elements in output order: {duplicates}")
+    out.parent.mkdir(parents=True, exist_ok=True)
 
     cols = ["Time(ps)"]
     cols.extend(f"{elem}{MSD_SUFFIX}" for elem in element_order)
@@ -157,13 +165,28 @@ def load_dat(filepath: str | Path) -> Dict[str, np.ndarray]:
     data: Dict[str, List[float]] = {}
     header: List[str] = []
     with open(filepath, encoding="utf-8", errors="replace") as f:
-        for line in f:
+        for line_number, line in enumerate(f, start=1):
+            if not line.strip():
+                continue
             if line.startswith("#"):
                 header = line[1:].strip().split()
+                duplicates = sorted(
+                    {col for col in header if header.count(col) > 1}
+                )
+                if duplicates:
+                    raise ValueError(
+                        f"Duplicate columns in {filepath} line {line_number}: "
+                        f"{duplicates}"
+                    )
                 for col in header:
                     data[col] = []
             else:
                 vals = list(map(float, line.strip().split()))
+                if len(vals) != len(header):
+                    raise ValueError(
+                        f"Column count mismatch in {filepath} line {line_number}: "
+                        f"expected {len(header)}, got {len(vals)}"
+                    )
                 for col, val in zip(header, vals):
                     data[col].append(val)
     return {k: np.array(v) for k, v in data.items()}
