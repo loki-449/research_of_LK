@@ -27,12 +27,15 @@ init_imports()
 
 from path_config import add_work_root_argument, resolve_work_root, work_root_from_args
 from msd_common import (
+    OutputLockedError,
     aimd_dir_of,
     compute_msd_by_element,
     ensure_result_dirs,
+    exclusive_output_lock,
     iter_aimd_xdatcars,
     local_dat_path,
     publish_dat,
+    published_dat_path,
     read_xdatcar,
     resolve_dt,
     results_to_table,
@@ -131,22 +134,30 @@ def extract_one(
         print(f"  [dry-run] would write + publish under {wr}")
         return True
 
-    positions, elem_map = read_xdatcar(xdatcar)
-    elems = elements or unique_elements(elem_map, order=element_order)
-    print(
-        f"  frames: {positions.shape[0]}, atoms: {positions.shape[1]}, "
-        f"elements: {elems}"
+    lock_target = (
+        local_out if no_publish else published_dat_path(wr, system_a)
     )
+    try:
+        with exclusive_output_lock(lock_target):
+            positions, elem_map = read_xdatcar(xdatcar)
+            elems = elements or unique_elements(elem_map, order=element_order)
+            print(
+                f"  frames: {positions.shape[0]}, atoms: {positions.shape[1]}, "
+                f"elements: {elems}"
+            )
 
-    results = compute_msd_by_element(
-        positions, timestep, elem_map, elements=elems
-    )
-    data = results_to_table(results)
-    write_dat(data, local_out, stride=stride, element_order=elems)
+            results = compute_msd_by_element(
+                positions, timestep, elem_map, elements=elems
+            )
+            data = results_to_table(results)
+            write_dat(data, local_out, stride=stride, element_order=elems)
 
-    if not no_publish:
-        ensure_result_dirs(wr)
-        publish_dat(local_out, wr, system_a, keep_local=keep_local)
+            if not no_publish:
+                ensure_result_dirs(wr)
+                publish_dat(local_out, wr, system_a, keep_local=keep_local)
+    except OutputLockedError as exc:
+        print(f"  ERROR: {exc}")
+        return False
     return True
 
 
