@@ -34,8 +34,22 @@ def read_xdatcar(path: str | Path) -> Tuple[np.ndarray, List[str]]:
     with open(path, encoding="utf-8", errors="replace") as f:
         lines = f.readlines()
 
-    scale = float(lines[1].strip())
-    lattice = np.array([list(map(float, line.split())) for line in lines[2:5]]) * scale
+    scale_values = np.array(list(map(float, lines[1].split())))
+    lattice = np.array([list(map(float, line.split())) for line in lines[2:5]])
+    if len(scale_values) == 1:
+        scale = float(scale_values[0])
+    elif len(scale_values) == 3:
+        if np.any(scale_values <= 0):
+            raise ValueError(
+                f"XDATCAR three-factor scaling values must be positive: {path}"
+            )
+        scale = scale_values
+    else:
+        raise ValueError(
+            f"Expected one or three XDATCAR scaling values in {path}, "
+            f"got {len(scale_values)}"
+        )
+    lattice = lattice * scale
     elements_raw = lines[5].split()
     counts = list(map(int, lines[6].split()))
     n_atoms = sum(counts)
